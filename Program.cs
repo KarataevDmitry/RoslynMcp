@@ -1,50 +1,50 @@
+using System.Collections.Frozen;
 using System.Text.Json;
 using ModelContextProtocol;
 using ModelContextProtocol.Protocol;
 using ModelContextProtocol.Server;
+using RoslynMcp;
 using Tool = ModelContextProtocol.Protocol.Tool;
-
-// MCP-сервер для рефакторинга C#: доступ к Roslyn (символы, find usages, rename и т.д.).
-// Пока — минимальный скелет с одним инструментом-заглушкой.
-
-static JsonElement EmptyObjectSchema() =>
-    JsonSerializer.SerializeToElement(new { type = "object", properties = new { } });
 
 var toolsList = new List<Tool>
 {
-    new()
-    {
-        Name = "roslyn_ping",
-        Description = "Проверка доступности сервера. Возвращает текущее время и статус.",
-        InputSchema = EmptyObjectSchema()
-    }
+    new() { Name = "roslyn_ping", Description = "Проверка доступности сервера.", InputSchema = ToolSchemas.Ping() },
+    new() { Name = "roslyn_get_document_symbols", Description = "Структура C# файла: namespace, class, method, property, field с номерами строк.", InputSchema = ToolSchemas.GetDocumentSymbols() },
+    new() { Name = "roslyn_get_symbol_at_position", Description = "Символ в позиции (файл, строка, столбец — 1-based): kind и имя.", InputSchema = ToolSchemas.GetSymbolAtPosition() },
+    new() { Name = "roslyn_find_usages", Description = "Все ссылки на символ в solution/project. line/column — на идентификаторе (имя метода, класса и т.д.), не на типе в сигнатуре.", InputSchema = ToolSchemas.FindUsages() },
+    new() { Name = "roslyn_rename", Description = "Переименовать символ по solution. apply: false — превью; true — записать. Чтобы затронуть комментарии/строки/перегрузки/файл — передай rename_in_comments, rename_in_strings, rename_overloads, rename_file (bool).", InputSchema = ToolSchemas.Rename() },
+    new() { Name = "roslyn_get_code_actions", Description = "Список Quick Actions / рефакторингов в позиции (как лампочка в VS). Параметры: solution_or_project_path, file_path, line, column. Возвращает нумерованный список; применить — roslyn_apply_code_action с action_index.", InputSchema = ToolSchemas.GetCodeActions() },
+    new() { Name = "roslyn_apply_code_action", Description = "Применить выбранное code action по индексу из roslyn_get_code_actions. Параметры: solution_or_project_path, file_path, line, column, action_index (0-based).", InputSchema = ToolSchemas.ApplyCodeAction() },
 };
 
 var options = new McpServerOptions
 {
-    ServerInfo = new Implementation { Name = "RoslynMcp", Version = "0.1.0" },
+    ServerInfo = new Implementation { Name = "RoslynMcp", Version = "0.5.0" },
     ProtocolVersion = "2024-11-05",
     Capabilities = new ServerCapabilities { Tools = new ToolsCapability { ListChanged = false } },
     Handlers = new McpServerHandlers
     {
         ListToolsHandler = (_, _) => ValueTask.FromResult(new ListToolsResult { Tools = toolsList }),
 
-        CallToolHandler = async (request, _) =>
+        CallToolHandler = async (request, cancellationToken) =>
         {
             var name = request.Params?.Name ?? "";
-            if (name != "roslyn_ping")
+            var args = request.Params?.Arguments is IReadOnlyDictionary<string, JsonElement> a
+                ? a
+                : FrozenDictionary<string, JsonElement>.Empty;
+            try
             {
-                return new CallToolResult
-                {
-                    Content = [new TextContentBlock { Text = $"Unknown tool: {name}" }],
-                    IsError = true
-                };
+                var text = await ToolHandlers.HandleAsync(name, args, cancellationToken).ConfigureAwait(false);
+                return new CallToolResult { Content = [new TextContentBlock { Text = text }] };
             }
-            var text = $"OK {DateTime.UtcNow:O} — RoslynMcp stub. find_usages, rename, symbols coming next.";
-            return new CallToolResult
+            catch (ArgumentException ex)
             {
-                Content = [new TextContentBlock { Text = text }]
-            };
+                return new CallToolResult { Content = [new TextContentBlock { Text = $"Error: {ex.Message}" }], IsError = true };
+            }
+            catch (Exception ex)
+            {
+                return new CallToolResult { Content = [new TextContentBlock { Text = $"Error: {ex.Message}" }], IsError = true };
+            }
         }
     }
 };
