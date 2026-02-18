@@ -2,7 +2,7 @@
 
 MCP-сервер для помощи агенту при рефакторинге C#: доступ к **Roslyn** (синтаксические деревья, семантика, символы, find usages, rename, code actions). Цель — стабильный тул без глюков (альтернатива Bifrost).
 
-**Текущий статус:** работают `roslyn_get_document_symbols`, `roslyn_get_symbol_at_position`, `roslyn_find_usages`, `roslyn_rename`, `roslyn_get_code_actions`, `roslyn_apply_code_action`.
+**Текущий статус:** работают `roslyn_ping`, `roslyn_get_document_symbols`, `roslyn_get_symbol_at_position`, `roslyn_find_usages`, `roslyn_rename`, `roslyn_get_code_actions`, `roslyn_apply_code_action`, `roslyn_get_diagnostics`.
 
 ## Требования
 
@@ -49,7 +49,8 @@ Exe появится в `roslyn-mcp/publish/RoslynMcp.exe`. В конфиге MC
 | `roslyn_find_usages` | Все ссылки на символ в solution/project. В выводе: квалифицированное имя (FullyQualifiedFormat), место определения (Definition:), затем список ссылок. Параметры: `solution_or_project_path`, `file_path`, `line`, `column` (на идентификаторе). |
 | `roslyn_rename` | Переименование символа по solution. Параметры: `solution_or_project_path`, `file_path`, `line`, `column`, `new_name`, опционально `apply` (превью/запись), `rename_in_comments`, `rename_in_strings`, `rename_overloads`, `rename_file` (аналог опций в VS). |
 | `roslyn_get_code_actions` | Список Quick Actions / рефакторингов в позиции (как лампочка в VS). Параметры: `solution_or_project_path`, `file_path`, `line`, `column`. Возвращает нумерованный список. |
-| `roslyn_apply_code_action` | Применить выбранное code action. Параметры: `solution_or_project_path`, `file_path`, `line`, `column`, `action_index` (0-based). Опционально `fix_all_scope`: `"document"` \| `"project"` \| `"solution"` — Fix all в файле/проекте/решении (только для code fixes с поддержкой Fix All). |
+| `roslyn_apply_code_action` | Применить выбранное code action. Параметры: `solution_or_project_path`, `file_path`, `line`, `column`, `action_index` (0-based). Опционально `fix_all_scope`: `"document"` \| `"project"` \| `"solution"`; `constant_name` — имя константы для действий вроде Introduce constant. *Примечание:* для Introduce constant параметр `constant_name` может не сработать (провайдер Roslyn не всегда принимает его); тогда после apply используй `roslyn_rename` для нужного имени. |
+| `roslyn_get_diagnostics` | Диагностики компиляции и анализаторов по solution/project. Предпочтительно использовать вместо разбора логов сборки. Чтобы исправить: вызвать `roslyn_get_code_actions` по file:line:column из ответа, затем `roslyn_apply_code_action` (или fix_all_scope). Параметры: `solution_or_project_path`, опционально `file_path` — только по одному файлу. |
 
 ## Лицензия
 
