@@ -168,4 +168,21 @@ public static class ToolSchemas
             },
             required = new[] { "solution_or_project_path", "file_path", "symbol_name" }
         });
+
+    public static JsonElement GenerateInterfaceFromClass() =>
+        ToElement(new
+        {
+            type = "object",
+            properties = new
+            {
+                solution_or_project_path = new { type = "string", description = "Путь к .sln или .csproj." },
+                file_path = new { type = "string", description = "Путь к .cs файлу с классом." },
+                line = new { type = "integer", description = "Строка (1-based): курсор на имени класса или внутри тела." },
+                column = new { type = "integer", description = "Столбец (1-based)." },
+                interface_name = new { type = "string", description = "Опционально. Имя интерфейса (по умолчанию I + имя класса)." },
+                output_file_path = new { type = "string", description = "Опционально. Путь к .cs файлу для записи интерфейса. Иначе возвращается только текст." },
+                member_names = new { type = "array", items = new { type = "string" }, description = "Опционально. Массив имён методов/свойств для включения в интерфейс. Если не задан — все public instance методы и свойства." }
+            },
+            required = new[] { "solution_or_project_path", "file_path", "line", "column" }
+        });
 }
