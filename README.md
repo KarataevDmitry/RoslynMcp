@@ -91,6 +91,7 @@ claude mcp add --transport stdio roslyn -- dotnet run --project .
 | `roslyn_get_diagnostics` | Диагностики компиляции и анализаторов по solution/project. Предпочтительно использовать вместо разбора логов сборки. Чтобы исправить: вызвать `roslyn_get_code_actions` по file:line:column из ответа, затем `roslyn_apply_code_action` (или fix_all_scope). Параметры: `solution_or_project_path`, опционально `file_path` — только по одному файлу. |
 | `roslyn_get_solution_structure` | Список проектов в solution (имя, путь к .csproj). Параметр: `solution_or_project_path` (.sln или .csproj). Для реп с только .slnx: передай путь к главному .csproj — вернётся список подгруженных проектов. |
 | `roslyn_generate_interface_from_class` | Сгенерировать C# интерфейс по классу **без диалогов** (обходной путь для Extract Interface). Позиция на класс: `solution_or_project_path`, `file_path`, `line`, `column`. Опционально: `interface_name`, `output_file_path`, `member_names` (массив). Дальше вручную или через code action добавь классу `: IName` и примени «Implement interface». |
+| `roslyn_generate_base_class_from_class` | Сгенерировать абстрактный базовый класс по классу **без диалогов** (обходной путь для Extract Base Class). Позиция на класс: `solution_or_project_path`, `file_path`, `line`, `column`. Опционально: `base_class_name`, `output_file_path`, `member_names` (массив). Дальше: добавить классу `: BaseName` и проставить `override` у членов. |
 
 ## Лицензия
 

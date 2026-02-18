@@ -185,4 +185,21 @@ public static class ToolSchemas
             },
             required = new[] { "solution_or_project_path", "file_path", "line", "column" }
         });
+
+    public static JsonElement GenerateBaseClassFromClass() =>
+        ToElement(new
+        {
+            type = "object",
+            properties = new
+            {
+                solution_or_project_path = new { type = "string", description = "Путь к .sln или .csproj." },
+                file_path = new { type = "string", description = "Путь к .cs файлу с классом." },
+                line = new { type = "integer", description = "Строка (1-based): курсор на имени класса или внутри тела." },
+                column = new { type = "integer", description = "Столбец (1-based)." },
+                base_class_name = new { type = "string", description = "Опционально. Имя абстрактного базового класса (по умолчанию ИмяКлассаBase)." },
+                output_file_path = new { type = "string", description = "Опционально. Путь к .cs файлу для записи. Иначе возвращается только текст." },
+                member_names = new { type = "array", items = new { type = "string" }, description = "Опционально. Массив имён методов/свойств/событий для переноса в базовый класс как abstract. Если не задан — все public instance." }
+            },
+            required = new[] { "solution_or_project_path", "file_path", "line", "column" }
+        });
 }

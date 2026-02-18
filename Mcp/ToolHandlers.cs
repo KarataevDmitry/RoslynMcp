@@ -26,6 +26,7 @@ public static class ToolHandlers
             "roslyn_sync_namespaces" => SyncNamespacesAsync(args, cancellationToken),
             "roslyn_resolve_breakpoint" => ResolveBreakpointAsync(args, cancellationToken),
             "roslyn_generate_interface_from_class" => GenerateInterfaceFromClassAsync(args, cancellationToken),
+            "roslyn_generate_base_class_from_class" => GenerateBaseClassFromClassAsync(args, cancellationToken),
             _ => throw new ArgumentException($"Unknown tool: {name}.", nameof(name))
         };
     }
@@ -220,6 +221,24 @@ public static class ToolHandlers
         if (args.TryGetValue("member_names", out var mnEl) && mnEl.ValueKind == JsonValueKind.Array && GetStringArray(mnEl) is string[] arr && arr.Length > 0)
             memberNames = arr;
         return GenerateInterface.GenerateInterfaceFromClassAsync(solutionPath!, filePath!, line, column, interfaceName, outputFilePath, memberNames, ct);
+    }
+
+    private static Task<string> GenerateBaseClassFromClassAsync(IReadOnlyDictionary<string, JsonElement> args, CancellationToken ct)
+    {
+        if (!TryGetString(args, "solution_or_project_path", out var solutionPath))
+            throw new ArgumentException("solution_or_project_path (string) is required.");
+        if (!TryGetString(args, "file_path", out var filePath))
+            throw new ArgumentException("file_path (string) is required.");
+        if (!TryGetInt(args, "line", out var line) || line < 1)
+            throw new ArgumentException("line (integer >= 1) is required.");
+        if (!TryGetInt(args, "column", out var column) || column < 1)
+            throw new ArgumentException("column (integer >= 1) is required.");
+        TryGetString(args, "base_class_name", out var baseClassName);
+        TryGetString(args, "output_file_path", out var outputFilePath);
+        IReadOnlyList<string>? memberNames = null;
+        if (args.TryGetValue("member_names", out var mnEl) && mnEl.ValueKind == JsonValueKind.Array && GetStringArray(mnEl) is string[] arr && arr.Length > 0)
+            memberNames = arr;
+        return GenerateBaseClass.GenerateBaseClassFromClassAsync(solutionPath!, filePath!, line, column, baseClassName, outputFilePath, memberNames, ct);
     }
 
     private static bool TryGetString(IReadOnlyDictionary<string, JsonElement> args, string key, out string? value)
