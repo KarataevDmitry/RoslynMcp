@@ -55,4 +55,4 @@ Exe появится в `roslyn-mcp/publish/RoslynMcp.exe`. В конфиге MC
 
 ## Лицензия
 
-Планируется open source (лицензия уточняется).
+MIT License. См. [LICENSE](LICENSE).
