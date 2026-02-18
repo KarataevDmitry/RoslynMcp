@@ -3,7 +3,7 @@ using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 
-namespace RoslynMcp;
+namespace RoslynMcp.Services;
 
 /// <summary>Извлечение структуры документа (классы, методы, свойства) по синтаксису без загрузки solution.</summary>
 public static class DocumentSymbols

@@ -9,7 +9,7 @@ using Microsoft.CodeAnalysis.CodeRefactorings;
 using Microsoft.CodeAnalysis.MSBuild;
 using Microsoft.CodeAnalysis.Text;
 
-namespace RoslynMcp;
+namespace RoslynMcp.Services;
 
 /// <summary>Поставляет диагностики из компиляции для FixAllContext (по документу/проекту).</summary>
 internal sealed class CompilationDiagnosticProvider : FixAllContext.DiagnosticProvider

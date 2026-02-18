@@ -1,6 +1,6 @@
 using System.Text.Json;
 
-namespace RoslynMcp;
+namespace RoslynMcp.Mcp;
 
 /// <summary>JSON-схемы параметров инструментов MCP.</summary>
 public static class ToolSchemas

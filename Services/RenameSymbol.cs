@@ -1,13 +1,13 @@
 using System.Text;
 using Microsoft.CodeAnalysis;
-using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.MSBuild;
+using Microsoft.CodeAnalysis.Rename;
 using Microsoft.CodeAnalysis.Text;
 
-namespace RoslynMcp;
+namespace RoslynMcp.Services;
 
-/// <summary>Переход к определению символа: по позиции в файле возвращает file:line:column объявления (объявлений для partial и т.п.).</summary>
-public static class GoToDefinition
+/// <summary>Переименование символа по solution. preview (apply=false) — только список изменений; apply=true — запись в файлы.</summary>
+public static class RenameSymbol
 {
     private static string NormalizePath(string path)
     {
@@ -17,17 +17,25 @@ public static class GoToDefinition
         return p;
     }
 
-    public static async Task<string> GoToDefinitionAsync(
+    public static async Task<string> RenameAsync(
         string solutionOrProjectPath,
         string filePath,
         int line,
         int column,
+        string newName,
+        bool apply,
+        bool renameInComments = false,
+        bool renameInStrings = false,
+        bool renameOverloads = false,
+        bool renameFile = false,
         CancellationToken cancellationToken = default)
     {
         if (!File.Exists(solutionOrProjectPath))
             return $"Error: solution/project not found: {solutionOrProjectPath}";
         if (!File.Exists(filePath))
             return $"Error: file not found: {filePath}";
+        if (string.IsNullOrWhiteSpace(newName))
+            return "Error: new_name is required.";
 
         var targetPath = NormalizePath(filePath);
         Solution? solution = null;
@@ -66,55 +74,70 @@ public static class GoToDefinition
 
             var node = root.FindToken(position, findInsideTrivia: true).Parent;
             ISymbol? symbol = null;
-            SyntaxNode? symbolNode = null;
             while (node != null)
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 symbol = semanticModel.GetDeclaredSymbol(node, cancellationToken) ?? semanticModel.GetSymbolInfo(node, cancellationToken).Symbol;
-                if (symbol != null)
-                {
-                    symbolNode = node;
-                    break;
-                }
+                if (symbol != null) break;
                 node = node.Parent;
             }
             if (symbol is null)
                 return $"No symbol at {filePath}:{line}:{column}.";
 
-            // Если нашли метод и позиция в левой части X.Y (до точки), переходим к определению типа X
-            if (symbol is IMethodSymbol && symbolNode != null)
-            {
-                var memberAccess = symbolNode.AncestorsAndSelf()
-                    .OfType<MemberAccessExpressionSyntax>()
-                    .FirstOrDefault(ma => position < ma.OperatorToken.Span.Start);
-                if (memberAccess != null)
-                {
-                    var typeInfo = semanticModel.GetTypeInfo(memberAccess.Expression, cancellationToken);
-                    if (typeInfo.Type is INamedTypeSymbol typeSymbol && typeSymbol.Locations.Any(l => l.IsInSource))
-                        symbol = typeSymbol;
-                }
-            }
-
-            // Для алиаса (using X = Y) берём целевой символ
-            if (symbol is IAliasSymbol alias)
-                symbol = alias.Target;
-
-            var defLocations = symbol.Locations.Where(loc => loc.IsInSource && loc.SourceTree?.FilePath != null).ToList();
-            if (defLocations.Count == 0)
-                return $"Definition not in source (e.g. metadata): {symbol.Kind} {symbol.Name}.";
+            var options = new SymbolRenameOptions(renameOverloads, renameInStrings, renameInComments, renameFile);
+            var newSolution = await Renamer.RenameSymbolAsync(solution, symbol, options, newName, cancellationToken).ConfigureAwait(false);
 
             var sb = new StringBuilder();
             var docPath = document.FilePath ?? filePath;
             sb.AppendLine($"# Document: {docPath} (total_lines={lines.Count}, line_{line}_length={lineLen})");
-            sb.AppendLine($"# Definition(s) of {symbol.Kind} {symbol.Name}");
+            sb.AppendLine($"# Rename {symbol.Kind} {symbol.Name} → {newName}");
             sb.AppendLine();
-            foreach (var loc in defLocations)
+
+            var changed = new List<Document>();
+            foreach (var project in newSolution.Projects)
             {
-                if (loc.SourceTree?.FilePath is null) continue;
-                var span = loc.GetLineSpan();
-                sb.AppendLine($"{loc.SourceTree.FilePath}:{span.StartLinePosition.Line + 1}:{span.StartLinePosition.Character + 1}");
+                foreach (var doc in project.Documents)
+                {
+                    if (doc.FilePath is null) continue;
+                    var oldDoc = solution.GetDocument(doc.Id);
+                    if (oldDoc is null) continue;
+                    var oldText = await oldDoc.GetTextAsync(cancellationToken).ConfigureAwait(false);
+                    var newText = await doc.GetTextAsync(cancellationToken).ConfigureAwait(false);
+                    if (!oldText.ContentEquals(newText))
+                        changed.Add(doc);
+                }
             }
-            sb.AppendLine().AppendLine($"Total: {defLocations.Count} definition(s)");
+
+            if (changed.Count == 0)
+            {
+                sb.AppendLine("(no changes)");
+                return sb.ToString();
+            }
+
+            var applied = new List<string>();
+            foreach (var doc in changed)
+            {
+                if (apply)
+                {
+                    var newText = await doc.GetTextAsync(cancellationToken).ConfigureAwait(false);
+                    await File.WriteAllTextAsync(doc.FilePath!, newText.ToString(), cancellationToken).ConfigureAwait(false);
+                    applied.Add(doc.FilePath!);
+                }
+                else
+                    sb.AppendLine(doc.FilePath);
+            }
+
+            if (apply)
+            {
+                sb.AppendLine("Applied to:");
+                foreach (var p in applied)
+                    sb.AppendLine("  " + p);
+            }
+            else
+            {
+                sb.AppendLine().AppendLine($"Total: {changed.Count} file(s). Call with apply: true to write.");
+            }
+
             return sb.ToString();
         }
         catch (InvalidOperationException ex) when (ex.Message.Contains("slnx") || ex.Message.Contains("Slnx"))

@@ -1,6 +1,7 @@
 using System.Text.Json;
+using RoslynMcp.Services;
 
-namespace RoslynMcp;
+namespace RoslynMcp.Mcp;
 
 /// <summary>Обработчики вызовов инструментов MCP. Один вход — имя + аргументы, выход — текст результата или исключение.</summary>
 public static class ToolHandlers

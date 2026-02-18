@@ -21,3 +21,17 @@
 **Реализация:** тот же паттерн, что в GetDiagnostics/FindUsages — открыть solution, обойти Projects, вернуть JSON/текст. Сложность низкая.
 
 **Редактирование .sln (add/remove project):** отдельная задача. Для **чтения** .sln API есть: **Microsoft.Build.Construction.SolutionFile** (пакет Microsoft.Build) — `SolutionFile.Parse(path)` возвращает объект с `ProjectsInOrder`, `ProjectsByGuid`, `SolutionConfigurations`; ручной парсинг не нужен. Для **записи** (добавить/удалить проект и сохранить .sln) в публичном API MSBuild готового метода нет: SolutionFile read-only, сериализации обратно в файл не экспонируется. Варианты: формирование .sln по формату вручную, или другой API (например EnvDTE в контексте VS). Имеет смысл только при появлении сценариев «добавь/убери проект в solution».
+
+---
+
+## Sync Namespaces / Match to folder structure
+
+**Источник:** команды IDE (VS, ReSharper, Rider): «Sync Namespaces», «Adjust namespaces to match folder structure» — namespace в файле приводится к пути папки относительно проекта (например `Services/` → `RootNamespace.Services`).
+
+**Смысл:** агент не имеет доступа к меню Refactor в IDE; при переносе файлов по папкам (через терминал или MCP) namespace приходится править вручную. Тул в нашем MCP даёт «одной командой» то же, что Sync Namespaces в IDE.
+
+**Идея:** **roslyn_sync_namespaces** (или **roslyn_match_namespaces_to_folders**): параметры `solution_or_project_path`, опционально `project_path` (если solution — какой проект), опционально `dry_run` (только отчёт, без записи). Алгоритм: для каждого .cs в проекте вычислить целевой namespace по относительному пути папок (RootNamespace + папки); заменить объявление namespace в файле; найти все вхождения типов из этого файла в других файлах и при необходимости добавить/обновить using. Записать изменённые документы через `File.WriteAllTextAsync` (как в RenameSymbol/ApplyCodeAction).
+
+**Реализация:** MSBuildWorkspace, обход project.Documents, путь файла относительно project.FilePath → папки → namespace. Синтаксис: замена NamespaceDeclarationSyntax/FileScopedNamespaceDeclarationSyntax. Семантика: SymbolFinder.FindReferences или обход компиляции для обновления usings в других файлах. Сложность средняя.
+
+**Расширение (позже):** **Move type to folder** / move file: перенос файла в новую папку + обновление namespace + правка usings по решению. Требует создания папки и перемещения файла (файловая система) плюс обновление .csproj, если в нём явно перечислены файлы (в SDK-style обычно нет). Краевые случаи: partial class, несколько типов в одном файле.
