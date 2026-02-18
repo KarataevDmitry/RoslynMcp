@@ -144,9 +144,9 @@ public static class ToolSchemas
             type = "object",
             properties = new
             {
-                solution_or_project_path = new { type = "string", description = "Путь к .sln или .csproj (.slnx не поддерживается)." },
+                solution_or_project_path = new { type = "string", description = "Путь к .sln или .csproj (.slnx не поддерживается). После переименования/перемещения папок вызвать сначала с dry_run для превью." },
                 project_path = new { type = "string", description = "Опционально. Для solution с несколькими проектами — путь к .csproj, чтобы синхронизировать только этот проект." },
-                dry_run = new { type = "boolean", description = "Опционально. true — только отчёт о планируемых изменениях, без записи в файлы." }
+                dry_run = new { type = "boolean", description = "Опционально. true — только отчёт о планируемых изменениях, без записи. Рекомендуется сначала dry_run, затем без dry_run для применения." }
             },
             required = new[] { "solution_or_project_path" }
         });
