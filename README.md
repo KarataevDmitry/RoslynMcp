@@ -37,7 +37,50 @@ Exe появится в `roslyn-mcp/publish/RoslynMcp.exe`. В конфиге MC
 
 Обновить exe после правок: снова выполни ту же команду publish, затем перезапусти MCP или Cursor.
 
-Сервер работает по **stdio**. Для `roslyn_get_document_symbols` достаточно пути к .cs файлу; для будущих find_usages/rename рабочая директория — корень репо или solution.
+## VS Code + Claude Code
+
+Сервер работает по **stdio**. Подключение через [Claude Code](https://code.claude.com/docs/en/mcp) (VS Code с расширением Claude).
+
+**Требования:** .NET 10 (или собранный exe), установленный [Claude Code CLI](https://docs.anthropic.com/en/docs/build-with-claude/claude-code).
+
+### Вариант 1: через exe (рекомендуется)
+
+Собери exe (см. «Публикация exe» выше), затем добавь MCP:
+
+```bash
+claude mcp add --transport stdio roslyn -- C:\path\to\roslyn-mcp\publish\RoslynMcp.exe
+```
+
+На macOS/Linux подставь свой путь к exe, например `~/projects/roslyn-mcp/publish/RoslynMcp`.
+
+### Вариант 2: через dotnet run (из папки проекта)
+
+Если не собираешь exe, можно запускать из папки репо:
+
+```bash
+cd /path/to/roslyn-mcp
+claude mcp add --transport stdio roslyn -- dotnet run --project .
+```
+
+(При первом запуске Claude Code выполнит `dotnet run --project .` в текущей папке — открой проект так, чтобы текущим каталогом была папка `roslyn-mcp`, или укажи полный путь: `dotnet run --project /path/to/roslyn-mcp/RoslynMcp.csproj`.)
+
+### Общий конфиг в проекте (.mcp.json)
+
+Чтобы все в команде использовали один и тот же MCP, положи в корень C#-проекта файл `.mcp.json`:
+
+```json
+{
+  "mcpServers": {
+    "roslyn": {
+      "type": "stdio",
+      "command": "C:\\path\\to\\roslyn-mcp\\publish\\RoslynMcp.exe",
+      "args": []
+    }
+  }
+}
+```
+
+Путь к `command` каждый подставляет свой (или используй переменные окружения, если Claude Code их поддерживает в `.mcp.json`). После сохранения Claude Code предложит доверять серверу; в чате можно проверить статус командой `/mcp`.
 
 ## Инструменты (tools)
 
@@ -52,6 +95,7 @@ Exe появится в `roslyn-mcp/publish/RoslynMcp.exe`. В конфиге MC
 | `roslyn_get_code_actions` | Список Quick Actions / рефакторингов в позиции (как лампочка в VS). Параметры: `solution_or_project_path`, `file_path`, `line`, `column`. Возвращает нумерованный список. |
 | `roslyn_apply_code_action` | Применить выбранное code action. Параметры: `solution_or_project_path`, `file_path`, `line`, `column`, `action_index` (0-based). Опционально `fix_all_scope`: `"document"` \| `"project"` \| `"solution"`; `constant_name` — имя константы для действий вроде Introduce constant. *Примечание:* для Introduce constant параметр `constant_name` может не сработать (провайдер Roslyn не всегда принимает его); тогда после apply используй `roslyn_rename` для нужного имени. |
 | `roslyn_get_diagnostics` | Диагностики компиляции и анализаторов по solution/project. Предпочтительно использовать вместо разбора логов сборки. Чтобы исправить: вызвать `roslyn_get_code_actions` по file:line:column из ответа, затем `roslyn_apply_code_action` (или fix_all_scope). Параметры: `solution_or_project_path`, опционально `file_path` — только по одному файлу. |
+| `roslyn_get_solution_structure` | Список проектов в solution (имя, путь к .csproj). Параметр: `solution_or_project_path` (.sln или .csproj). Для реп с только .slnx: передай путь к главному .csproj — вернётся список подгруженных проектов. |
 
 ## Лицензия
 
