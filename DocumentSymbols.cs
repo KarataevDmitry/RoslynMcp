@@ -8,6 +8,8 @@ namespace RoslynMcp;
 /// <summary>Извлечение структуры документа (классы, методы, свойства) по синтаксису без загрузки solution.</summary>
 public static class DocumentSymbols
 {
+    private const string @int = "namespace";
+
     private static int GetLine(SyntaxNode? node)
     {
         if (node?.SyntaxTree is null) return 0;
@@ -31,8 +33,8 @@ public static class DocumentSymbols
 
             (string? kind, string? name, int line) tuple = node switch
             {
-                NamespaceDeclarationSyntax n => ("namespace", n.Name.ToString(), GetLine(n)),
-                FileScopedNamespaceDeclarationSyntax n => ("namespace", n.Name.ToString(), GetLine(n)),
+                NamespaceDeclarationSyntax n => (@int, n.Name.ToString(), GetLine(n)),
+                FileScopedNamespaceDeclarationSyntax n => (@int, n.Name.ToString(), GetLine(n)),
                 ClassDeclarationSyntax n => ("class", n.Identifier.Text, GetLine(n)),
                 StructDeclarationSyntax n => ("struct", n.Identifier.Text, GetLine(n)),
                 InterfaceDeclarationSyntax n => ("interface", n.Identifier.Text, GetLine(n)),
