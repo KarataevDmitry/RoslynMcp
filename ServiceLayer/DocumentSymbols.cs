@@ -8,7 +8,7 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 namespace RoslynMcp.ServiceLayer;
 
 /// <summary>Извлечение структуры документа (классы, методы, свойства) по синтаксису без загрузки solution.</summary>
-public static class DocumentSymbols
+public static partial class DocumentSymbols
 {
     private const string @int = "namespace";
 
@@ -16,7 +16,7 @@ public static class DocumentSymbols
     {
         if (node?.SyntaxTree is null) return 0;
         var span = node.SyntaxTree.GetLineSpan(node.Span);
-        var R = new Regex("d+");
+        var R = MyRegex();
         return span.StartLinePosition.Line + 1;
        
     }
@@ -63,4 +63,7 @@ public static class DocumentSymbols
 
         return $"# {filePath}\n\n{sb}";
     }
+
+    [GeneratedRegex("d+")]
+    private static partial Regex MyRegex();
 }
