@@ -1,5 +1,5 @@
 // Синтетический тест для roslyn_rename: 5 вхождений SyntheticRenameTarget.
-namespace RoslynMcp.Services;
+namespace RoslynMcp.ServiceLayer;
 
 public static class SyntheticRenameTest
 {

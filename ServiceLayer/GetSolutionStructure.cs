@@ -2,7 +2,7 @@ using System.Text;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.MSBuild;
 
-namespace RoslynMcp.Services;
+namespace RoslynMcp.ServiceLayer;
 
 /// <summary>Структура solution: список проектов (имя, путь к .csproj). Только чтение, без загрузки компиляции.</summary>
 public static class GetSolutionStructure

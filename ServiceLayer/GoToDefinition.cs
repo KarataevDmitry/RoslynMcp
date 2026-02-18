@@ -4,7 +4,7 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.MSBuild;
 using Microsoft.CodeAnalysis.Text;
 
-namespace RoslynMcp.Services;
+namespace RoslynMcp.ServiceLayer;
 
 /// <summary>Переход к определению символа: по позиции в файле возвращает file:line:column объявления (объявлений для partial и т.п.).</summary>
 public static class GoToDefinition

@@ -4,7 +4,7 @@ using Microsoft.CodeAnalysis.FindSymbols;
 using Microsoft.CodeAnalysis.MSBuild;
 using Microsoft.CodeAnalysis.Text;
 
-namespace RoslynMcp.Services;
+namespace RoslynMcp.ServiceLayer;
 
 /// <summary>Поиск всех ссылок на символ в solution/project. Требует путь к .sln или .csproj.</summary>
 public static class FindUsages

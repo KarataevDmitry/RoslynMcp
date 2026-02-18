@@ -6,7 +6,7 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.MSBuild;
 using Microsoft.CodeAnalysis.Text;
 
-namespace RoslynMcp.Services;
+namespace RoslynMcp.ServiceLayer;
 
 /// <summary>Приведение объявлений namespace к структуре папок (RootNamespace + путь папки). Опционально dry_run — только отчёт.</summary>
 public static class SyncNamespaces

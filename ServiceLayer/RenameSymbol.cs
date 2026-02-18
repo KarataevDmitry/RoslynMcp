@@ -4,7 +4,7 @@ using Microsoft.CodeAnalysis.MSBuild;
 using Microsoft.CodeAnalysis.Rename;
 using Microsoft.CodeAnalysis.Text;
 
-namespace RoslynMcp.Services;
+namespace RoslynMcp.ServiceLayer;
 
 /// <summary>Переименование символа по solution. preview (apply=false) — только список изменений; apply=true — запись в файлы.</summary>
 public static class RenameSymbol

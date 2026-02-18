@@ -4,7 +4,7 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.MSBuild;
 using Microsoft.CodeAnalysis.Text;
 
-namespace RoslynMcp.Services;
+namespace RoslynMcp.ServiceLayer;
 
 /// <summary>Символ в позиции (строка, столбец). Без solution — по синтаксису; с solution_or_project_path — семантика и квалифицированное имя. 1-based.</summary>
 public static class SymbolAtPosition
