@@ -94,8 +94,22 @@ public static class ToolSchemas
                 file_path = new { type = "string", description = "Путь к .cs файлу." },
                 line = new { type = "integer", description = "Строка (1-based), та же позиция, что при get_code_actions." },
                 column = new { type = "integer", description = "Столбец (1-based)." },
-                action_index = new { type = "integer", description = "Индекс действия (0-based) из списка roslyn_get_code_actions." }
+                action_index = new { type = "integer", description = "Индекс действия (0-based) из списка roslyn_get_code_actions." },
+                fix_all_scope = new { type = "string", description = "Опционально. Scope применения: \"document\" | \"project\" | \"solution\" — Fix all в файле/проекте/решении. Только для code fixes с поддержкой Fix All." },
+                constant_name = new { type = "string", description = "Опционально. Имя константы для действий с опциями (например Introduce constant). Если не задано, провайдер использует значение по умолчанию (например V)." }
             },
             required = new[] { "solution_or_project_path", "file_path", "line", "column", "action_index" }
+        });
+
+    public static JsonElement GetDiagnostics() =>
+        ToElement(new
+        {
+            type = "object",
+            properties = new
+            {
+                solution_or_project_path = new { type = "string", description = "Путь к .sln или .csproj." },
+                file_path = new { type = "string", description = "Опционально. Путь к .cs файлу — тогда только диагностики этого файла. Иначе — по всему решению/проекту." }
+            },
+            required = new[] { "solution_or_project_path" }
         });
 }

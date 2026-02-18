@@ -19,6 +19,7 @@ public static class ToolHandlers
             "roslyn_rename" => RenameAsync(args, cancellationToken),
             "roslyn_get_code_actions" => GetCodeActionsAsync(args, cancellationToken),
             "roslyn_apply_code_action" => ApplyCodeActionAsync(args, cancellationToken),
+            "roslyn_get_diagnostics" => GetDiagnosticsAsync(args, cancellationToken),
             _ => throw new ArgumentException($"Unknown tool: {name}.", nameof(name))
         };
     }
@@ -105,7 +106,17 @@ public static class ToolHandlers
             throw new ArgumentException("column (integer >= 1) is required.");
         if (!TryGetInt(args, "action_index", out var actionIndex) || actionIndex < 0)
             throw new ArgumentException("action_index (integer >= 0) is required.");
-        return CodeActions.ApplyCodeActionAsync(solutionPath!, filePath!, line, column, actionIndex, ct);
+        TryGetString(args, "fix_all_scope", out var fixAllScope);
+        TryGetString(args, "constant_name", out var constantName);
+        return CodeActions.ApplyCodeActionAsync(solutionPath!, filePath!, line, column, actionIndex, fixAllScope, constantName, ct);
+    }
+
+    private static Task<string> GetDiagnosticsAsync(IReadOnlyDictionary<string, JsonElement> args, CancellationToken ct)
+    {
+        if (!TryGetString(args, "solution_or_project_path", out var solutionPath))
+            throw new ArgumentException("solution_or_project_path (string) is required.");
+        TryGetString(args, "file_path", out var filePath);
+        return GetDiagnostics.GetDiagnosticsAsync(solutionPath!, filePath, ct);
     }
 
     private static bool TryGetString(IReadOnlyDictionary<string, JsonElement> args, string key, out string? value)
