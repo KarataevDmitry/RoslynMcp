@@ -16,10 +16,12 @@ public static class ToolHandlers
             "roslyn_get_document_symbols" => Task.FromResult(GetDocumentSymbols(args, cancellationToken)),
             "roslyn_get_symbol_at_position" => GetSymbolAtPositionAsync(args, cancellationToken),
             "roslyn_find_usages" => FindUsagesAsync(args, cancellationToken),
+            "roslyn_go_to_definition" => GoToDefinitionAsync(args, cancellationToken),
             "roslyn_rename" => RenameAsync(args, cancellationToken),
             "roslyn_get_code_actions" => GetCodeActionsAsync(args, cancellationToken),
             "roslyn_apply_code_action" => ApplyCodeActionAsync(args, cancellationToken),
             "roslyn_get_diagnostics" => GetDiagnosticsAsync(args, cancellationToken),
+            "roslyn_get_solution_structure" => GetSolutionStructureAsync(args, cancellationToken),
             _ => throw new ArgumentException($"Unknown tool: {name}.", nameof(name))
         };
     }
@@ -59,6 +61,19 @@ public static class ToolHandlers
         if (!TryGetInt(args, "column", out var column) || column < 1)
             throw new ArgumentException("column (integer >= 1) is required.");
         return await FindUsages.FindUsagesAsync(solutionPath!, filePath!, line, column, ct).ConfigureAwait(false);
+    }
+
+    private static Task<string> GoToDefinitionAsync(IReadOnlyDictionary<string, JsonElement> args, CancellationToken ct)
+    {
+        if (!TryGetString(args, "solution_or_project_path", out var solutionPath))
+            throw new ArgumentException("solution_or_project_path (string) is required.");
+        if (!TryGetString(args, "file_path", out var filePath))
+            throw new ArgumentException("file_path (string) is required.");
+        if (!TryGetInt(args, "line", out var line) || line < 1)
+            throw new ArgumentException("line (integer >= 1) is required.");
+        if (!TryGetInt(args, "column", out var column) || column < 1)
+            throw new ArgumentException("column (integer >= 1) is required.");
+        return GoToDefinition.GoToDefinitionAsync(solutionPath!, filePath!, line, column, ct);
     }
 
     private static async Task<string> RenameAsync(IReadOnlyDictionary<string, JsonElement> args, CancellationToken ct)
@@ -117,6 +132,13 @@ public static class ToolHandlers
             throw new ArgumentException("solution_or_project_path (string) is required.");
         TryGetString(args, "file_path", out var filePath);
         return GetDiagnostics.GetDiagnosticsAsync(solutionPath!, filePath, ct);
+    }
+
+    private static Task<string> GetSolutionStructureAsync(IReadOnlyDictionary<string, JsonElement> args, CancellationToken ct)
+    {
+        if (!TryGetString(args, "solution_or_project_path", out var solutionPath))
+            throw new ArgumentException("solution_or_project_path (string) is required.");
+        return GetSolutionStructure.GetStructureAsync(solutionPath!, ct);
     }
 
     private static bool TryGetString(IReadOnlyDictionary<string, JsonElement> args, string key, out string? value)

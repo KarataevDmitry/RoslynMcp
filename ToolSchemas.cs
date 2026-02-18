@@ -50,6 +50,20 @@ public static class ToolSchemas
             required = new[] { "solution_or_project_path", "file_path", "line", "column" }
         });
 
+    public static JsonElement GoToDefinition() =>
+        ToElement(new
+        {
+            type = "object",
+            properties = new
+            {
+                solution_or_project_path = new { type = "string", description = "Путь к .sln или .csproj." },
+                file_path = new { type = "string", description = "Путь к .cs файлу." },
+                line = new { type = "integer", description = "Строка (1-based), позиция на идентификаторе символа." },
+                column = new { type = "integer", description = "Столбец (1-based)." }
+            },
+            required = new[] { "solution_or_project_path", "file_path", "line", "column" }
+        });
+
     public static JsonElement Rename() =>
         ToElement(new
         {
@@ -109,6 +123,17 @@ public static class ToolSchemas
             {
                 solution_or_project_path = new { type = "string", description = "Путь к .sln или .csproj." },
                 file_path = new { type = "string", description = "Опционально. Путь к .cs файлу — тогда только диагностики этого файла. Иначе — по всему решению/проекту." }
+            },
+            required = new[] { "solution_or_project_path" }
+        });
+
+    public static JsonElement GetSolutionStructure() =>
+        ToElement(new
+        {
+            type = "object",
+            properties = new
+            {
+                solution_or_project_path = new { type = "string", description = "Путь к .sln или .csproj. Если в репо только .slnx (формат не поддерживается): передай путь к главному .csproj (например UI или стартовый проект) — вернётся список всех подгруженных проектов (включая ссылки). Иначе: список проектов (имя и путь к .csproj) для передачи в остальные тулы." }
             },
             required = new[] { "solution_or_project_path" }
         });
