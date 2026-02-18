@@ -150,4 +150,17 @@ public static class ToolSchemas
             },
             required = new[] { "solution_or_project_path" }
         });
+
+    public static JsonElement ResolveBreakpoint() =>
+        ToElement(new
+        {
+            type = "object",
+            properties = new
+            {
+                solution_or_project_path = new { type = "string", description = "Путь к .sln или .csproj." },
+                file_path = new { type = "string", description = "Путь к .cs файлу, в котором искать символ." },
+                symbol_name = new { type = "string", description = "Имя символа: метод, конструктор, свойство. Для индексатора передать \"this\". Возвращается file:line первой исполняемой строки (место для брейкпоинта)." }
+            },
+            required = new[] { "solution_or_project_path", "file_path", "symbol_name" }
+        });
 }
