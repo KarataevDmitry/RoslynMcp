@@ -1,0 +1,11 @@
+---
+description: Проверка C# кода — вызывать roslyn_get_diagnostics (этот MCP), не только ReadLints
+globs: "**/*.cs"
+alwaysApply: false
+---
+
+# Использовать roslyn_get_diagnostics для проверки кода
+
+При поиске проблем в C# (неиспользуемые переменные, предупреждения компилятора, анализаторы) **вызывать инструмент этого сервера `roslyn_get_diagnostics`** с `solution_or_project_path` (и при необходимости `file_path`), а не полагаться только на ReadLints или ручной просмотр.
+
+Ответ даёт полный список диагностик (file:line:column, severity, id, message), в том числе CS0219 (unused variable). Исправлять по file:line:column через roslyn_get_code_actions и roslyn_apply_code_action.
