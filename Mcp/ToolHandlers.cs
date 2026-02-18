@@ -23,6 +23,7 @@ public static class ToolHandlers
             "roslyn_apply_code_action" => ApplyCodeActionAsync(args, cancellationToken),
             "roslyn_get_diagnostics" => GetDiagnosticsAsync(args, cancellationToken),
             "roslyn_get_solution_structure" => GetSolutionStructureAsync(args, cancellationToken),
+            "roslyn_sync_namespaces" => SyncNamespacesAsync(args, cancellationToken),
             _ => throw new ArgumentException($"Unknown tool: {name}.", nameof(name))
         };
     }
@@ -140,6 +141,15 @@ public static class ToolHandlers
         if (!TryGetString(args, "solution_or_project_path", out var solutionPath))
             throw new ArgumentException("solution_or_project_path (string) is required.");
         return GetSolutionStructure.GetStructureAsync(solutionPath!, ct);
+    }
+
+    private static Task<string> SyncNamespacesAsync(IReadOnlyDictionary<string, JsonElement> args, CancellationToken ct)
+    {
+        if (!TryGetString(args, "solution_or_project_path", out var solutionPath))
+            throw new ArgumentException("solution_or_project_path (string) is required.");
+        TryGetString(args, "project_path", out var projectPath);
+        var dryRun = args.TryGetValue("dry_run", out var dryRunEl) && dryRunEl.ValueKind == JsonValueKind.True;
+        return SyncNamespaces.SyncAsync(solutionPath!, dryRun, projectPath, cancellationToken: ct);
     }
 
     private static bool TryGetString(IReadOnlyDictionary<string, JsonElement> args, string key, out string? value)

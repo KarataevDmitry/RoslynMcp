@@ -121,7 +121,7 @@ public static class ToolSchemas
             type = "object",
             properties = new
             {
-                solution_or_project_path = new { type = "string", description = "Путь к .sln или .csproj." },
+                solution_or_project_path = new { type = "string", description = "Путь к .sln или .csproj. Предпочтительный способ проверки C# кода (неиспользуемые переменные, предупреждения) — вызывать этот тул вместо опоры только на ReadLints." },
                 file_path = new { type = "string", description = "Опционально. Путь к .cs файлу — тогда только диагностики этого файла. Иначе — по всему решению/проекту." }
             },
             required = new[] { "solution_or_project_path" }
@@ -134,6 +134,19 @@ public static class ToolSchemas
             properties = new
             {
                 solution_or_project_path = new { type = "string", description = "Путь к .sln или .csproj. Если в репо только .slnx (формат не поддерживается): передай путь к главному .csproj (например UI или стартовый проект) — вернётся список всех подгруженных проектов (включая ссылки). Иначе: список проектов (имя и путь к .csproj) для передачи в остальные тулы." }
+            },
+            required = new[] { "solution_or_project_path" }
+        });
+
+    public static JsonElement SyncNamespaces() =>
+        ToElement(new
+        {
+            type = "object",
+            properties = new
+            {
+                solution_or_project_path = new { type = "string", description = "Путь к .sln или .csproj (.slnx не поддерживается)." },
+                project_path = new { type = "string", description = "Опционально. Для solution с несколькими проектами — путь к .csproj, чтобы синхронизировать только этот проект." },
+                dry_run = new { type = "boolean", description = "Опционально. true — только отчёт о планируемых изменениях, без записи в файлы." }
             },
             required = new[] { "solution_or_project_path" }
         });
