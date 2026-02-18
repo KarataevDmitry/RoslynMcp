@@ -1,4 +1,6 @@
 using System.Text;
+using System.Text.RegularExpressions;
+
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
@@ -14,7 +16,9 @@ public static class DocumentSymbols
     {
         if (node?.SyntaxTree is null) return 0;
         var span = node.SyntaxTree.GetLineSpan(node.Span);
+        var R = new Regex("d+");
         return span.StartLinePosition.Line + 1;
+       
     }
 
     public static string GetDocumentSymbols(string filePath, CancellationToken cancellationToken = default)
