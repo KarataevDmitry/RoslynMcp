@@ -6,6 +6,7 @@ using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CodeActions;
 using Microsoft.CodeAnalysis.CodeFixes;
 using Microsoft.CodeAnalysis.CodeRefactorings;
+using Microsoft.CodeAnalysis.Diagnostics;
 using Microsoft.CodeAnalysis.MSBuild;
 using Microsoft.CodeAnalysis.Text;
 
@@ -53,7 +54,7 @@ internal sealed class CompilationDiagnosticProvider : FixAllContext.DiagnosticPr
     }
 }
 
-/// <summary>Список code actions (рефакторинги/фиксы) в позиции и применение выбранного. Провайдеры загружаются через рефлексию из Features-сборок.</summary>
+/// <summary>Список code actions (рефакторинги/фиксы) в позиции и применение выбранного. Провайдеры: Features-сборки + CodeFixProvider из AnalyzerReferences проекта (например фикс SYSLIB1045 из рантайма).</summary>
 public static class CodeActions
 {
     private static string NormalizePath(string path)
@@ -83,7 +84,7 @@ public static class CodeActions
         return list;
     }
 
-    private static IEnumerable<CodeFixProvider> GetCodeFixProviders()
+    private static IEnumerable<CodeFixProvider> GetCodeFixProvidersBuiltIn()
     {
         var list = new List<CodeFixProvider>();
         var assemblies = new[] { typeof(CodeFixProvider).Assembly, Assembly.Load("Microsoft.CodeAnalysis.CSharp.Features"), Assembly.Load("Microsoft.CodeAnalysis.Features") };
@@ -101,6 +102,70 @@ public static class CodeActions
             }
         }
         return list;
+    }
+
+    /// <summary>Провайдеры из сборок проекта (AnalyzerReferences). Сюда попадают фиксы из рантайма (например SYSLIB1045 — Convert to GeneratedRegexAttribute).</summary>
+    private static IEnumerable<CodeFixProvider> GetCodeFixProvidersFromProject(Project project)
+    {
+        var list = new List<CodeFixProvider>();
+        var seen = new HashSet<Assembly>();
+        foreach (var ar in project.AnalyzerReferences)
+        {
+            var analyzers = ar.GetAnalyzers(project.Language);
+            if (analyzers.Length == 0) continue;
+            var asm = analyzers[0].GetType().Assembly;
+            if (!seen.Add(asm)) continue;
+            foreach (var type in asm.GetTypes())
+            {
+                if (type.IsAbstract || !typeof(CodeFixProvider).IsAssignableFrom(type)) continue;
+                try
+                {
+                    if (Activator.CreateInstance(type) is CodeFixProvider provider)
+                        list.Add(provider);
+                }
+                catch { /* skip */ }
+            }
+        }
+        return list;
+    }
+
+    private static IEnumerable<CodeFixProvider> GetCodeFixProviders(Project project)
+    {
+        return GetCodeFixProvidersBuiltIn().Concat(GetCodeFixProvidersFromProject(project));
+    }
+
+    /// <summary>Компиляторные + диагностики анализаторов по файлу, пересекающиеся с span. Нужно для RegisterCodeFixesAsync (SYSLIB1045 и др. приходят от анализаторов).</summary>
+    private static async Task<ImmutableArray<Diagnostic>> GetDiagnosticsInSpanAsync(Project project, Compilation? compilation, string targetPath, TextSpan span, CancellationToken cancellationToken)
+    {
+        if (compilation is null) return ImmutableArray<Diagnostic>.Empty;
+        var list = new List<Diagnostic>();
+        foreach (var d in compilation.GetDiagnostics(cancellationToken))
+        {
+            if (d.Location.SourceTree?.FilePath is null) continue;
+            if (!string.Equals(NormalizePath(d.Location.SourceTree.FilePath), targetPath, StringComparison.OrdinalIgnoreCase)) continue;
+            if (!d.Location.SourceSpan.IntersectsWith(span)) continue;
+            list.Add(d);
+        }
+        var analyzers = project.AnalyzerReferences.SelectMany(r => r.GetAnalyzers(project.Language)).ToImmutableArray();
+        if (!analyzers.IsEmpty)
+        {
+            var options = new CompilationWithAnalyzersOptions(
+                new AnalyzerOptions(ImmutableArray<AdditionalText>.Empty),
+                onAnalyzerException: (_, _, _) => { },
+                concurrentAnalysis: true,
+                logAnalyzerExecutionTime: false,
+                reportSuppressedDiagnostics: false);
+            var cwa = new CompilationWithAnalyzers(compilation, analyzers, options);
+            var result = await cwa.GetAnalysisResultAsync(cancellationToken).ConfigureAwait(false);
+            foreach (var d in result.GetAllDiagnostics())
+            {
+                if (d.Location.SourceTree?.FilePath is null) continue;
+                if (!string.Equals(NormalizePath(d.Location.SourceTree.FilePath), targetPath, StringComparison.OrdinalIgnoreCase)) continue;
+                if (!d.Location.SourceSpan.IntersectsWith(span)) continue;
+                list.Add(d);
+            }
+        }
+        return list.ToImmutableArray();
     }
 
     /// <summary>Возвращает вложенные действия (подменю), если есть; иначе пустой массив. Использует свойство NestedActions или рефлексию.</summary>
@@ -276,11 +341,12 @@ public static class CodeActions
             }
 
             var compilation = await document.Project.GetCompilationAsync(cancellationToken).ConfigureAwait(false);
-            foreach (var provider in GetCodeFixProviders())
+            var diagnosticsForFile = await GetDiagnosticsInSpanAsync(document.Project, compilation, targetPath, span, cancellationToken).ConfigureAwait(false);
+            foreach (var provider in GetCodeFixProviders(document.Project))
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 var fixableIds = provider.FixableDiagnosticIds;
-                var diagnostics = compilation?.GetDiagnostics(cancellationToken).Where(d => d.Location.SourceTree?.FilePath != null && NormalizePath(d.Location.SourceTree.FilePath) == targetPath && d.Location.SourceSpan.IntersectsWith(span)).ToImmutableArray() ?? ImmutableArray<Diagnostic>.Empty;
+                var diagnostics = diagnosticsForFile.Where(d => fixableIds.Contains(d.Id)).ToImmutableArray();
                 foreach (var diagnostic in diagnostics)
                 {
                     if (!fixableIds.Contains(diagnostic.Id)) continue;
@@ -389,13 +455,13 @@ public static class CodeActions
             }
 
             var compilation = await document.Project.GetCompilationAsync(cancellationToken).ConfigureAwait(false);
-            var diagnostics = compilation?.GetDiagnostics(cancellationToken).Where(d => d.Location.SourceTree?.FilePath != null && NormalizePath(d.Location.SourceTree.FilePath) == targetPath && d.Location.SourceSpan.IntersectsWith(span)).ToImmutableArray() ?? ImmutableArray<Diagnostic>.Empty;
+            var diagnosticsForFileApply = await GetDiagnosticsInSpanAsync(document.Project, compilation, targetPath, span, cancellationToken).ConfigureAwait(false);
 
-            foreach (var provider in GetCodeFixProviders())
+            foreach (var provider in GetCodeFixProviders(document.Project))
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 var fixableIds = provider.FixableDiagnosticIds;
-                foreach (var diagnostic in diagnostics)
+                foreach (var diagnostic in diagnosticsForFileApply)
                 {
                     if (!fixableIds.Contains(diagnostic.Id)) continue;
                     var collected = new List<CodeAction>();
