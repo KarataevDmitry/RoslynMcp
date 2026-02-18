@@ -20,16 +20,10 @@ dotnet run
 
 Чтобы Cursor запускал MCP из **exe**, а не из проекта, сборка не будет блокироваться запущенным процессом.
 
-**Рекомендуется** — самодостаточная сборка (рантайм в папке, не зависит от установленного .NET в системе):
+В **csproj** заданы `RuntimeIdentifier=win-x64` и `SelfContained=true` — самодостаточная сборка (рантайм в папке, не зависит от установленного .NET в системе). Достаточно:
 
 ```bash
 cd roslyn-mcp
-dotnet publish -c Release -r win-x64 --self-contained -o publish
-```
-
-Альтернатива — без рантайма (нужен установленный .NET 10 x64 в системе):
-
-```bash
 dotnet publish -c Release -o publish
 ```
 
