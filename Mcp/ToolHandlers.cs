@@ -109,7 +109,9 @@ public static class ToolHandlers
             throw new ArgumentException("line (integer >= 1) is required.");
         if (!TryGetInt(args, "column", out var column) || column < 1)
             throw new ArgumentException("column (integer >= 1) is required.");
-        return CodeActions.GetCodeActionsAsync(solutionPath!, filePath!, line, column, ct);
+        int? endLine = TryGetInt(args, "end_line", out var el) && el >= 1 ? el : null;
+        int? endColumn = TryGetInt(args, "end_column", out var ec) && ec >= 1 ? ec : null;
+        return CodeActions.GetCodeActionsAsync(solutionPath!, filePath!, line, column, endLine, endColumn, ct);
     }
 
     private static Task<string> ApplyCodeActionAsync(IReadOnlyDictionary<string, JsonElement> args, CancellationToken ct)
@@ -124,9 +126,46 @@ public static class ToolHandlers
             throw new ArgumentException("column (integer >= 1) is required.");
         if (!TryGetInt(args, "action_index", out var actionIndex) || actionIndex < 0)
             throw new ArgumentException("action_index (integer >= 0) is required.");
+        int? endLineApply = TryGetInt(args, "end_line", out var ela) && ela >= 1 ? ela : null;
+        int? endColumnApply = TryGetInt(args, "end_column", out var eca) && eca >= 1 ? eca : null;
         TryGetString(args, "fix_all_scope", out var fixAllScope);
         TryGetString(args, "constant_name", out var constantName);
-        return CodeActions.ApplyCodeActionAsync(solutionPath!, filePath!, line, column, actionIndex, fixAllScope, constantName, ct);
+        var actionOptions = TryGetActionOptions(args);
+        return CodeActions.ApplyCodeActionAsync(solutionPath!, filePath!, line, column, actionIndex, endLineApply, endColumnApply, fixAllScope, constantName, actionOptions, ct);
+    }
+
+    /// <summary>Парсит action_options из args: JSON object → Dictionary (string, int, bool, string[]).</summary>
+    private static IReadOnlyDictionary<string, object?>? TryGetActionOptions(IReadOnlyDictionary<string, JsonElement> args)
+    {
+        if (!args.TryGetValue("action_options", out var el) || el.ValueKind != JsonValueKind.Object)
+            return null;
+        var dict = new Dictionary<string, object?>(StringComparer.OrdinalIgnoreCase);
+        foreach (var prop in el.EnumerateObject())
+        {
+            object? val = prop.Value.ValueKind switch
+            {
+                JsonValueKind.String => prop.Value.GetString(),
+                JsonValueKind.Number => prop.Value.TryGetInt32(out var i32) ? i32 : prop.Value.TryGetInt64(out var i64) ? i64 : (object?)prop.Value.GetDouble(),
+                JsonValueKind.True => true,
+                JsonValueKind.False => false,
+                JsonValueKind.Array => GetStringArray(prop.Value),
+                _ => null
+            };
+            if (val != null || prop.Value.ValueKind == JsonValueKind.Null || prop.Value.ValueKind == JsonValueKind.String)
+                dict[prop.Name] = val;
+        }
+        return dict.Count == 0 ? null : dict;
+    }
+
+    private static object? GetStringArray(JsonElement arr)
+    {
+        var list = new List<string>();
+        foreach (var item in arr.EnumerateArray())
+        {
+            if (item.ValueKind == JsonValueKind.String && item.GetString() is { } s)
+                list.Add(s);
+        }
+        return list.Count == 0 ? null : list.ToArray();
     }
 
     private static Task<string> GetDiagnosticsAsync(IReadOnlyDictionary<string, JsonElement> args, CancellationToken ct)

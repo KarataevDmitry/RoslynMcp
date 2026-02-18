@@ -92,8 +92,10 @@ public static class ToolSchemas
             {
                 solution_or_project_path = new { type = "string", description = "Путь к .sln или .csproj." },
                 file_path = new { type = "string", description = "Путь к .cs файлу." },
-                line = new { type = "integer", description = "Строка (1-based)." },
-                column = new { type = "integer", description = "Столбец (1-based)." }
+                line = new { type = "integer", description = "Строка начала (1-based)." },
+                column = new { type = "integer", description = "Столбец начала (1-based)." },
+                end_line = new { type = "integer", description = "Опционально. Строка конца выделения (1-based). Если заданы end_line и end_column — refactoring получает диапазон (например Extract method / Extract local function)." },
+                end_column = new { type = "integer", description = "Опционально. Столбец конца выделения (1-based). Задавать вместе с end_line." }
             },
             required = new[] { "solution_or_project_path", "file_path", "line", "column" }
         });
@@ -108,9 +110,12 @@ public static class ToolSchemas
                 file_path = new { type = "string", description = "Путь к .cs файлу." },
                 line = new { type = "integer", description = "Строка (1-based), та же позиция, что при get_code_actions." },
                 column = new { type = "integer", description = "Столбец (1-based)." },
+                end_line = new { type = "integer", description = "Опционально. Та же end_line, что при get_code_actions, если использовался диапазон." },
+                end_column = new { type = "integer", description = "Опционально. Та же end_column, что при get_code_actions." },
                 action_index = new { type = "integer", description = "Индекс действия (0-based) из списка roslyn_get_code_actions." },
                 fix_all_scope = new { type = "string", description = "Опционально. Scope применения: \"document\" | \"project\" | \"solution\" — Fix all в файле/проекте/решении. Только для code fixes с поддержкой Fix All." },
-                constant_name = new { type = "string", description = "Опционально. Имя константы для действий с опциями (например Introduce constant). Если не задано, провайдер использует значение по умолчанию (например V)." }
+                constant_name = new { type = "string", description = "Опционально. Имя константы для действий с опциями (например Introduce constant). Если не задано, провайдер использует значение по умолчанию (например V)." },
+                action_options = new { type = "object", description = "Опционально. JSON-объект опций для действий с диалогом (Extract interface, Extract base class и т.д.): ключи — имена свойств типа опций, значения — строки, числа, bool или массив строк (например member_names). См. REFACTORINGS.md." }
             },
             required = new[] { "solution_or_project_path", "file_path", "line", "column", "action_index" }
         });

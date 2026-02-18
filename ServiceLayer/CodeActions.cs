@@ -184,8 +184,8 @@ public static class CodeActions
         return default;
     }
 
-    /// <summary>Для действий с опциями (например Introduce constant): вызвать GetOperationsAsync(options, ct), подставив имя константы. Возвращает true, если вызов удался.</summary>
-    private static bool TryGetOperationsWithOptions(CodeAction action, string constantName, CancellationToken ct, out IEnumerable<CodeActionOperation>? operations)
+    /// <summary>Для действий с опциями: вызвать GetOperationsAsync(options, ct), подставив constantName и/или actionOptions. Возвращает true, если вызов удался.</summary>
+    private static bool TryGetOperationsWithOptions(CodeAction action, string? constantName, IReadOnlyDictionary<string, object?>? actionOptions, CancellationToken ct, out IEnumerable<CodeActionOperation>? operations)
     {
         operations = null;
         try
@@ -198,13 +198,26 @@ public static class CodeActions
             var optionsType = optionsParam.ParameterType;
             if (optionsType == typeof(object))
             {
-                var dict = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["Name"] = constantName, ["ConstantName"] = constantName };
-                var boxed = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase) { ["Name"] = constantName, ["ConstantName"] = constantName };
-                foreach (var tryOptions in new object[] { boxed, dict })
+                if (!string.IsNullOrWhiteSpace(constantName))
                 {
+                    var dict = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase) { ["Name"] = constantName, ["ConstantName"] = constantName };
+                    var boxed = new Dictionary<string, object>(StringComparer.OrdinalIgnoreCase) { ["Name"] = constantName, ["ConstantName"] = constantName };
+                    foreach (var tryOptions in new object[] { boxed, dict })
+                    {
+                        try
+                        {
+                            var task = method.Invoke(action, [tryOptions, ct]);
+                            if (TryUnwrapOperationsTask(task, out operations)) return operations != null;
+                        }
+                        catch { /* skip */ }
+                    }
+                }
+                if (actionOptions != null && actionOptions.Count > 0)
+                {
+                    var boxed = new Dictionary<string, object?>(actionOptions, StringComparer.OrdinalIgnoreCase);
                     try
                     {
-                        var task = method.Invoke(action, [tryOptions, ct]);
+                        var task = method.Invoke(action, [boxed, ct]);
                         if (TryUnwrapOperationsTask(task, out operations)) return operations != null;
                     }
                     catch { /* skip */ }
@@ -213,16 +226,68 @@ public static class CodeActions
             }
             var optionsInstance = Activator.CreateInstance(optionsType);
             if (optionsInstance is null) return false;
-            foreach (var propName in new[] { "Name", "ConstantName" })
+            if (!string.IsNullOrWhiteSpace(constantName))
             {
-                var prop = optionsType.GetProperty(propName, BindingFlags.Public | BindingFlags.Instance);
-                if (prop?.CanWrite == true) { prop.SetValue(optionsInstance, constantName); break; }
+                foreach (var propName in new[] { "Name", "ConstantName" })
+                {
+                    var prop = optionsType.GetProperty(propName, BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+                    if (prop?.CanWrite == true) { prop.SetValue(optionsInstance, constantName); break; }
+                }
+            }
+            if (actionOptions != null)
+            {
+                var props = optionsType.GetProperties(BindingFlags.Public | BindingFlags.NonPublic | BindingFlags.Instance);
+                foreach (var kv in actionOptions)
+                {
+                    var prop = props.FirstOrDefault(p => string.Equals(p.Name, kv.Key, StringComparison.OrdinalIgnoreCase));
+                    if (prop?.CanWrite != true || kv.Value is null) continue;
+                    var value = CoerceOptionValue(kv.Value, prop.PropertyType);
+                    if (value != null)
+                    {
+                        try { prop.SetValue(optionsInstance, value); } catch { /* skip */ }
+                    }
+                }
             }
             var task2 = method.Invoke(action, [optionsInstance, ct]);
             return TryUnwrapOperationsTask(task2, out operations);
         }
         catch { /* ignore */ }
         return false;
+    }
+
+    private static object? CoerceOptionValue(object value, Type targetType)
+    {
+        if (targetType.IsInstanceOfType(value)) return value;
+        if (value is string s)
+        {
+            if (targetType == typeof(string)) return s;
+            if (targetType == typeof(int) && int.TryParse(s, out var i)) return i;
+            if (targetType == typeof(long) && long.TryParse(s, out var l)) return l;
+            if (targetType == typeof(bool)) return bool.TryParse(s, out var b) ? b : (s.Length > 0);
+        }
+        if (value is int or long)
+        {
+            if (targetType == typeof(int)) return Convert.ToInt32(value);
+            if (targetType == typeof(long)) return Convert.ToInt64(value);
+            if (targetType == typeof(string)) return value.ToString();
+        }
+        if (value is bool flag && targetType == typeof(string)) return flag.ToString();
+        if (value is string[] arr)
+        {
+            if (targetType.IsArray && targetType.GetElementType() == typeof(string)) return arr;
+            if (typeof(System.Collections.IEnumerable).IsAssignableFrom(targetType) && targetType != typeof(string))
+            {
+                if (targetType.IsGenericType && targetType.GetGenericTypeDefinition() == typeof(ImmutableArray<>))
+                {
+                    var elem = targetType.GetGenericArguments()[0];
+                    if (elem == typeof(string))
+                        return ImmutableArray.CreateRange(arr);
+                }
+                if (targetType.IsAssignableFrom(typeof(List<string>))) return arr.ToList();
+                if (targetType.IsAssignableFrom(typeof(string[]))) return arr;
+            }
+        }
+        return null;
     }
 
     private static bool TryUnwrapOperationsTask(object? taskObj, out IEnumerable<CodeActionOperation>? operations)
@@ -247,6 +312,25 @@ public static class CodeActions
         if (string.Equals(value, "project", StringComparison.OrdinalIgnoreCase)) { scope = FixAllScope.Project; return true; }
         if (string.Equals(value, "solution", StringComparison.OrdinalIgnoreCase)) { scope = FixAllScope.Solution; return true; }
         return false;
+    }
+
+    /// <summary>Строит span от (line, column) до (endLine, endColumn) включительно. 1-based. Возвращает null при невалидном диапазоне.</summary>
+    private static TextSpan? TryGetSpanFromRange(TextLineCollection lines, int line, int column, int endLine, int endColumn)
+    {
+        if (line < 1 || endLine < 1 || line > lines.Count || endLine > lines.Count) return null;
+        if (column < 1 || endColumn < 1) return null;
+        var startLineInfo = lines[line - 1];
+        var endLineInfo = lines[endLine - 1];
+        var startColumnIndex = column - 1;
+        var endColumnIndex = endColumn - 1;
+        var startPosition = startLineInfo.Span.Length == 0
+            ? startLineInfo.Start
+            : startLineInfo.Start + Math.Min(startColumnIndex, startLineInfo.Span.Length);
+        var endPosition = endLineInfo.Span.Length == 0
+            ? endLineInfo.Start
+            : endLineInfo.Start + Math.Min(endColumnIndex, endLineInfo.Span.Length);
+        if (endPosition < startPosition) return null;
+        return TextSpan.FromBounds(startPosition, endPosition + 1);
     }
 
     /// <summary>Разворачивает действие: если есть вложенные — возвращает пары (родитель > дочерний, дочернее действие), иначе одну пару (заголовок, само действие).</summary>
@@ -276,6 +360,8 @@ public static class CodeActions
         string filePath,
         int line,
         int column,
+        int? endLine = null,
+        int? endColumn = null,
         CancellationToken cancellationToken = default)
     {
         if (!File.Exists(solutionOrProjectPath))
@@ -314,10 +400,18 @@ public static class CodeActions
             var position = lineLen == 0
                 ? lineInfo.Start
                 : lineInfo.Start + Math.Min(columnIndex, lineLen);
-            var root = await document.GetSyntaxRootAsync(cancellationToken).ConfigureAwait(false);
-            var span = root is null
-                ? new TextSpan(position, 0)
-                : root.FindToken(position, findInsideTrivia: true).Span;
+            TextSpan span;
+            if (endLine.HasValue && endColumn.HasValue && TryGetSpanFromRange(lines, line, column, endLine.Value, endColumn.Value) is { } rangeSpan)
+            {
+                span = rangeSpan;
+            }
+            else
+            {
+                var root = await document.GetSyntaxRootAsync(cancellationToken).ConfigureAwait(false);
+                span = root is null
+                    ? new TextSpan(position, 0)
+                    : root.FindToken(position, findInsideTrivia: true).Span;
+            }
 
             var docPath = document.FilePath ?? filePath;
             var docInfo = $"# Document: {docPath} (total_lines={lines.Count}, line_{line}_length={lineLen})";
@@ -393,8 +487,11 @@ public static class CodeActions
         int line,
         int column,
         int actionIndex,
+        int? endLine = null,
+        int? endColumn = null,
         string? fixAllScope = null,
         string? constantName = null,
+        IReadOnlyDictionary<string, object?>? actionOptions = null,
         CancellationToken cancellationToken = default)
     {
         if (!File.Exists(solutionOrProjectPath))
@@ -433,10 +530,18 @@ public static class CodeActions
             var position = lineLen == 0
                 ? lineInfo.Start
                 : lineInfo.Start + Math.Min(columnIndex, lineLen);
-            var rootApply = await document.GetSyntaxRootAsync(cancellationToken).ConfigureAwait(false);
-            var span = rootApply is null
-                ? new TextSpan(position, 0)
-                : rootApply.FindToken(position, findInsideTrivia: true).Span;
+            TextSpan span;
+            if (endLine.HasValue && endColumn.HasValue && TryGetSpanFromRange(lines, line, column, endLine.Value, endColumn.Value) is { } rangeSpanApply)
+            {
+                span = rangeSpanApply;
+            }
+            else
+            {
+                var rootApply = await document.GetSyntaxRootAsync(cancellationToken).ConfigureAwait(false);
+                span = rootApply is null
+                    ? new TextSpan(position, 0)
+                    : rootApply.FindToken(position, findInsideTrivia: true).Span;
+            }
 
             var docPathApply = document.FilePath ?? filePath;
             var docInfoApply = $"# Document: {docPathApply} (total_lines={lines.Count}, line_{line}_length={lineLen})";
@@ -524,7 +629,8 @@ public static class CodeActions
             }
 
             IEnumerable<CodeActionOperation>? operationsSingle = null;
-            if (!string.IsNullOrWhiteSpace(constantName) && TryGetOperationsWithOptions(chosen, constantName.Trim(), cancellationToken, out var opsWithOptions))
+            var hasOptions = !string.IsNullOrWhiteSpace(constantName) || (actionOptions != null && actionOptions.Count > 0);
+            if (hasOptions && TryGetOperationsWithOptions(chosen, constantName?.Trim(), actionOptions, cancellationToken, out var opsWithOptions))
                 operationsSingle = opsWithOptions;
             if (operationsSingle is null)
                 operationsSingle = await chosen.GetOperationsAsync(cancellationToken).ConfigureAwait(false);
