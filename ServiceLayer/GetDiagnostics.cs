@@ -18,6 +18,15 @@ public static class GetDiagnostics
         return p;
     }
 
+    /// <summary>Исключаем артефакты сборки (obj/, bin/), чтобы не засорять вывод.</summary>
+    private static bool IsBuildArtifactPath(string normalizedPath)
+    {
+        return normalizedPath.Contains(Path.DirectorySeparatorChar + "obj" + Path.DirectorySeparatorChar, StringComparison.Ordinal)
+            || normalizedPath.Contains(Path.DirectorySeparatorChar + "bin" + Path.DirectorySeparatorChar, StringComparison.Ordinal)
+            || normalizedPath.Contains("/obj/", StringComparison.Ordinal)
+            || normalizedPath.Contains("/bin/", StringComparison.Ordinal);
+    }
+
     public static async Task<string> GetDiagnosticsAsync(
         string solutionOrProjectPath,
         string? filePath,
@@ -56,6 +65,7 @@ public static class GetDiagnostics
                 {
                     if (d.Location.SourceTree?.FilePath is null) continue;
                     var treePath = NormalizePath(d.Location.SourceTree.FilePath);
+                    if (IsBuildArtifactPath(treePath)) continue;
                     if (targetPath is not null && !string.Equals(treePath, targetPath, StringComparison.OrdinalIgnoreCase))
                         continue;
                     allDiagnostics.Add(d);
@@ -78,6 +88,7 @@ public static class GetDiagnostics
                     {
                         if (d.Location.SourceTree?.FilePath is null) continue;
                         var treePath = NormalizePath(d.Location.SourceTree.FilePath);
+                        if (IsBuildArtifactPath(treePath)) continue;
                         if (targetPath is not null && !string.Equals(treePath, targetPath, StringComparison.OrdinalIgnoreCase))
                             continue;
                         allDiagnostics.Add(d);
