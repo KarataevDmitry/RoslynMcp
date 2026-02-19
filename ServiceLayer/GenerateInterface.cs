@@ -90,6 +90,8 @@ public static class GenerateInterface
             if (typeSymbol is null)
                 return $"Error: no class or struct at {filePath}:{line}:{column}. Position the cursor on the type name or inside the class body.";
 
+            var style = EditorConfigStyle.GetOptionsForDirectory(Path.GetDirectoryName(document.FilePath) ?? "");
+
             var ns = typeSymbol.ContainingNamespace?.IsGlobalNamespace == true
                 ? null
                 : typeSymbol.ContainingNamespace?.ToDisplayString();
@@ -112,13 +114,13 @@ public static class GenerateInterface
                 switch (member)
                 {
                     case IMethodSymbol method when method.MethodKind == MethodKind.Ordinary:
-                        members.Add(FormatMethodSignature(method));
+                        members.Add(FormatMethodSignature(method, style));
                         break;
                     case IPropertySymbol prop when prop.IsIndexer == false:
-                        members.Add(FormatPropertySignature(prop));
+                        members.Add(FormatPropertySignature(prop, style));
                         break;
                     case IEventSymbol evt:
-                        members.Add(FormatEventSignature(evt));
+                        members.Add(FormatEventSignature(evt, style));
                         break;
                 }
             }
@@ -150,23 +152,23 @@ public static class GenerateInterface
         }
     }
 
-    private static string FormatMethodSignature(IMethodSymbol method)
+    private static string FormatMethodSignature(IMethodSymbol method, EditorStyleOptions style)
     {
-        var ret = method.ReturnType.ToDisplayString(TypeFormat);
-        var ps = string.Join(", ", method.Parameters.Select(p => $"{p.Type.ToDisplayString(TypeFormat)} {p.Name}"));
+        var ret = style.FormatTypeName(method.ReturnType.ToDisplayString(TypeFormat));
+        var ps = string.Join(", ", method.Parameters.Select(p => $"{style.FormatTypeName(p.Type.ToDisplayString(TypeFormat))} {p.Name}"));
         return $"\t{ret} {method.Name}({ps});";
     }
 
-    private static string FormatPropertySignature(IPropertySymbol prop)
+    private static string FormatPropertySignature(IPropertySymbol prop, EditorStyleOptions style)
     {
-        var type = prop.Type.ToDisplayString(TypeFormat);
+        var type = style.FormatTypeName(prop.Type.ToDisplayString(TypeFormat));
         var getSet = prop.IsReadOnly ? "{ get; }" : "{ get; set; }";
         return $"\t{type} {prop.Name} {getSet}";
     }
 
-    private static string FormatEventSignature(IEventSymbol evt)
+    private static string FormatEventSignature(IEventSymbol evt, EditorStyleOptions style)
     {
-        var type = evt.Type.ToDisplayString(TypeFormat);
+        var type = style.FormatTypeName(evt.Type.ToDisplayString(TypeFormat));
         return $"\t{type} {evt.Name};";
     }
 

@@ -93,6 +93,8 @@ public static class GenerateEqualsGetHashCode
             if (typeSymbol is null)
                 return $"Error: no class at {filePath}:{line}:{column}. Position the cursor on the class name or inside the class body.";
 
+            var style = EditorConfigStyle.GetOptionsForDirectory(Path.GetDirectoryName(document.FilePath) ?? "");
+
             var memberSet = memberNames != null && memberNames.Count > 0
                 ? new HashSet<string>(memberNames.Select(n => n.Trim()), StringComparer.OrdinalIgnoreCase)
                 : null;
@@ -130,7 +132,7 @@ public static class GenerateEqualsGetHashCode
                 var (closeBrace, indentBeforeBrace) = GetClassCloseBraceAndIndent(classDeclaration, root);
                 if (closeBrace != null)
                 {
-                    var insertIndent = indentBeforeBrace ?? "\t";
+                    var insertIndent = indentBeforeBrace ?? style.IndentString;
                     var toInsert = Environment.NewLine + insertIndent +
                         $"public override bool Equals(object? obj) => obj is {className} other && {equalsBody};" +
                         Environment.NewLine + insertIndent +

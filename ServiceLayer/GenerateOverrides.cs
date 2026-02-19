@@ -93,6 +93,8 @@ public static class GenerateOverrides
             if (typeSymbol is null)
                 return $"Error: no class at {filePath}:{line}:{column}. Position the cursor on the class name or inside the class body.";
 
+            var style = EditorConfigStyle.GetOptionsForDirectory(Path.GetDirectoryName(document.FilePath) ?? "");
+
             var baseType = typeSymbol.BaseType;
             if (baseType is null || baseType.SpecialType == SpecialType.System_Object)
                 return "Error: class has no base class (other than Object). Nothing to override.";
@@ -134,15 +136,15 @@ public static class GenerateOverrides
                     switch (member)
                     {
                         case IMethodSymbol method when method.MethodKind == MethodKind.Ordinary && (method.IsVirtual || method.IsOverride || method.IsAbstract):
-                            overrides.Add(FormatOverrideMethod(method));
+                            overrides.Add(FormatOverrideMethod(method, style));
                             alreadyOverridden.Add(method);
                             break;
                         case IPropertySymbol prop when !prop.IsIndexer && (prop.IsVirtual || prop.IsOverride || prop.IsAbstract):
-                            overrides.Add(FormatOverrideProperty(prop));
+                            overrides.Add(FormatOverrideProperty(prop, style));
                             alreadyOverridden.Add(prop);
                             break;
                         case IEventSymbol evt when evt.IsVirtual || evt.IsOverride || evt.IsAbstract:
-                            overrides.Add(FormatOverrideEvent(evt));
+                            overrides.Add(FormatOverrideEvent(evt, style));
                             alreadyOverridden.Add(evt);
                             break;
                     }
@@ -160,7 +162,7 @@ public static class GenerateOverrides
                 var (closeBrace, indentBeforeBrace) = GetClassCloseBraceAndIndent(classDeclaration, root);
                 if (closeBrace != null)
                 {
-                    var insertIndent = indentBeforeBrace ?? "\t";
+                    var insertIndent = indentBeforeBrace ?? style.IndentString;
                     var toInsert = Environment.NewLine + insertIndent + string.Join(Environment.NewLine + insertIndent, overrides) + Environment.NewLine + insertIndent;
                     var text = root.GetText();
                     var change = new TextChange(new TextSpan(closeBrace.Value.Span.Start, 0), toInsert);
@@ -207,27 +209,27 @@ public static class GenerateOverrides
         return (closeBrace, indent);
     }
 
-    private static string FormatOverrideMethod(IMethodSymbol method)
+    private static string FormatOverrideMethod(IMethodSymbol method, EditorStyleOptions style)
     {
-        var ret = method.ReturnType.ToDisplayString(TypeFormat);
-        var ps = string.Join(", ", method.Parameters.Select(p => $"{p.Type.ToDisplayString(TypeFormat)} {p.Name}"));
+        var ret = style.FormatTypeName(method.ReturnType.ToDisplayString(TypeFormat));
+        var ps = string.Join(", ", method.Parameters.Select(p => $"{style.FormatTypeName(p.Type.ToDisplayString(TypeFormat))} {p.Name}"));
         var body = method.ReturnsVoid
             ? "throw new NotImplementedException();"
             : "return default;";
         return $"public override {ret} {method.Name}({ps}) => {body}";
     }
 
-    private static string FormatOverrideProperty(IPropertySymbol prop)
+    private static string FormatOverrideProperty(IPropertySymbol prop, EditorStyleOptions style)
     {
-        var type = prop.Type.ToDisplayString(TypeFormat);
+        var type = style.FormatTypeName(prop.Type.ToDisplayString(TypeFormat));
         if (prop.IsReadOnly)
             return $"public override {type} {prop.Name} => throw new NotImplementedException();";
         return $"public override {type} {prop.Name} {{ get => throw new NotImplementedException(); set => throw new NotImplementedException(); }}";
     }
 
-    private static string FormatOverrideEvent(IEventSymbol evt)
+    private static string FormatOverrideEvent(IEventSymbol evt, EditorStyleOptions style)
     {
-        var type = evt.Type.ToDisplayString(TypeFormat);
+        var type = style.FormatTypeName(evt.Type.ToDisplayString(TypeFormat));
         return $"public override event {type} {evt.Name} {{ add => throw new NotImplementedException(); remove => throw new NotImplementedException(); }}";
     }
 }

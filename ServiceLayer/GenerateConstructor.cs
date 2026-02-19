@@ -93,9 +93,17 @@ public static class GenerateConstructor
             if (typeSymbol is null)
                 return $"Error: no class at {filePath}:{line}:{column}. Position the cursor on the class name or inside the class body.";
 
+            var style = EditorConfigStyle.GetOptionsForDirectory(Path.GetDirectoryName(document.FilePath) ?? "");
+
             var memberSet = memberNames != null && memberNames.Count > 0
                 ? new HashSet<string>(memberNames.Select(n => n.Trim()), StringComparer.OrdinalIgnoreCase)
                 : null;
+
+            var propertyNames = typeSymbol.GetMembers()
+                .OfType<IPropertySymbol>()
+                .Where(p => !p.IsIndexer)
+                .Select(p => p.Name)
+                .ToHashSet(StringComparer.OrdinalIgnoreCase);
 
             var members = new List<(string type, string memberName, string paramName)>();
             foreach (var member in typeSymbol.GetMembers())
@@ -108,12 +116,16 @@ public static class GenerateConstructor
                 switch (member)
                 {
                     case IFieldSymbol field when field.IsConst == false && field.IsStatic == false:
+                        if (IsBackingFieldForProperty(field.Name, propertyNames))
+                            continue;
                         var p1 = ToCamelCase(field.Name);
-                        members.Add((field.Type.ToDisplayString(TypeFormat), field.Name, p1));
+                        var type1 = style.FormatTypeName(field.Type.ToDisplayString(TypeFormat));
+                        members.Add((type1, field.Name, p1));
                         break;
                     case IPropertySymbol prop when prop.IsIndexer == false && !prop.IsReadOnly && prop.SetMethod != null:
                         var p2 = ToCamelCase(prop.Name);
-                        members.Add((prop.Type.ToDisplayString(TypeFormat), prop.Name, p2));
+                        var type2 = style.FormatTypeName(prop.Type.ToDisplayString(TypeFormat));
+                        members.Add((type2, prop.Name, p2));
                         break;
                 }
             }
@@ -131,7 +143,7 @@ public static class GenerateConstructor
                 var (closeBrace, indentBeforeBrace) = GetClassCloseBraceAndIndent(classDeclaration, root);
                 if (closeBrace != null)
                 {
-                    var insertIndent = indentBeforeBrace ?? "\t";
+                    var insertIndent = indentBeforeBrace ?? style.IndentString;
                     var toInsert = Environment.NewLine + insertIndent + ctorText.Replace(indent, insertIndent) + Environment.NewLine + insertIndent;
                     var text = root.GetText();
                     var change = new TextChange(new TextSpan(closeBrace.Value.Span.Start, 0), toInsert);
@@ -157,6 +169,18 @@ public static class GenerateConstructor
         {
             solution?.Workspace.Dispose();
         }
+    }
+
+    /// <summary>Поле считается backing для свойства, если есть свойство с тем же именем без ведущего '_' (например _source → Source).</summary>
+    private static bool IsBackingFieldForProperty(string fieldName, HashSet<string> propertyNames)
+    {
+        if (string.IsNullOrEmpty(fieldName) || !fieldName.StartsWith("_", StringComparison.Ordinal))
+            return false;
+        var withoutUnderscore = fieldName[1..];
+        if (withoutUnderscore.Length == 0)
+            return false;
+        var propertyName = char.ToUpperInvariant(withoutUnderscore[0]) + withoutUnderscore[1..];
+        return propertyNames.Contains(propertyName);
     }
 
     private static string ToCamelCase(string name)

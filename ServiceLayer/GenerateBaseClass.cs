@@ -90,6 +90,8 @@ public static class GenerateBaseClass
             if (typeSymbol is null)
                 return $"Error: no class at {filePath}:{line}:{column}. Position the cursor on the class name or inside the class body. (Struct not supported for base class.)";
 
+            var style = EditorConfigStyle.GetOptionsForDirectory(Path.GetDirectoryName(document.FilePath) ?? "");
+
             var ns = typeSymbol.ContainingNamespace?.IsGlobalNamespace == true
                 ? null
                 : typeSymbol.ContainingNamespace?.ToDisplayString();
@@ -112,13 +114,13 @@ public static class GenerateBaseClass
                 switch (member)
                 {
                     case IMethodSymbol method when method.MethodKind == MethodKind.Ordinary:
-                        members.Add(FormatAbstractMethod(method));
+                        members.Add(FormatAbstractMethod(method, style));
                         break;
                     case IPropertySymbol prop when prop.IsIndexer == false:
-                        members.Add(FormatAbstractProperty(prop));
+                        members.Add(FormatAbstractProperty(prop, style));
                         break;
                     case IEventSymbol evt:
-                        members.Add(FormatAbstractEvent(evt));
+                        members.Add(FormatAbstractEvent(evt, style));
                         break;
                 }
             }
@@ -150,23 +152,23 @@ public static class GenerateBaseClass
         }
     }
 
-    private static string FormatAbstractMethod(IMethodSymbol method)
+    private static string FormatAbstractMethod(IMethodSymbol method, EditorStyleOptions style)
     {
-        var ret = method.ReturnType.ToDisplayString(TypeFormat);
-        var ps = string.Join(", ", method.Parameters.Select(p => $"{p.Type.ToDisplayString(TypeFormat)} {p.Name}"));
+        var ret = style.FormatTypeName(method.ReturnType.ToDisplayString(TypeFormat));
+        var ps = string.Join(", ", method.Parameters.Select(p => $"{style.FormatTypeName(p.Type.ToDisplayString(TypeFormat))} {p.Name}"));
         return $"\tprotected abstract {ret} {method.Name}({ps});";
     }
 
-    private static string FormatAbstractProperty(IPropertySymbol prop)
+    private static string FormatAbstractProperty(IPropertySymbol prop, EditorStyleOptions style)
     {
-        var type = prop.Type.ToDisplayString(TypeFormat);
+        var type = style.FormatTypeName(prop.Type.ToDisplayString(TypeFormat));
         var getSet = prop.IsReadOnly ? "get;" : "get; set;";
         return $"\tprotected abstract {type} {prop.Name} {{ {getSet} }}";
     }
 
-    private static string FormatAbstractEvent(IEventSymbol evt)
+    private static string FormatAbstractEvent(IEventSymbol evt, EditorStyleOptions style)
     {
-        var type = evt.Type.ToDisplayString(TypeFormat);
+        var type = style.FormatTypeName(evt.Type.ToDisplayString(TypeFormat));
         return $"\tprotected abstract event {type} {evt.Name};";
     }
 
