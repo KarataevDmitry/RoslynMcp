@@ -1,5 +1,6 @@
 using System.Collections.Immutable;
 using System.Text;
+using System.Xml.Linq;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.Diagnostics;
 using Microsoft.CodeAnalysis.MSBuild;
@@ -27,40 +28,64 @@ public static class GetDiagnostics
             || normalizedPath.Contains("/bin/", StringComparison.Ordinal);
     }
 
-    public static async Task<string> GetDiagnosticsAsync(
-        string solutionOrProjectPath,
-        string? filePath,
-        CancellationToken cancellationToken = default)
+    /// <summary>Эффективная серьёзность по опциям компиляции (SpecificDiagnosticOptions, GeneralDiagnosticOption).
+    /// При загрузке через MSBuildWorkspace опции берутся из проекта; editorconfig может быть уже смержен в них (зависит от таргетов).</summary>
+    private static (DiagnosticSeverity effective, bool isSuppressed) GetEffectiveSeverity(Diagnostic d, CompilationOptions options)
     {
-        if (!File.Exists(solutionOrProjectPath))
-            return $"Error: solution/project not found: {solutionOrProjectPath}";
+        var report = options.SpecificDiagnosticOptions.GetValueOrDefault(d.Id, ReportDiagnostic.Default);
+        if (report == ReportDiagnostic.Suppress)
+            return (default, true);
 
-        string? targetPath = null;
-        if (!string.IsNullOrWhiteSpace(filePath))
+        var severity = report switch
         {
-            if (!File.Exists(filePath))
-                return $"Error: file not found: {filePath}";
-            targetPath = NormalizePath(filePath);
-        }
+            ReportDiagnostic.Error => DiagnosticSeverity.Error,
+            ReportDiagnostic.Warn => DiagnosticSeverity.Warning,
+            ReportDiagnostic.Info => DiagnosticSeverity.Info,
+            ReportDiagnostic.Hidden => DiagnosticSeverity.Hidden,
+            _ => d.Severity // Default → оставляем дефолтную серьёзность диагностики
+        };
 
-        Solution? solution = null;
-        try
-        {
-            var workspace = MSBuildWorkspace.Create();
-            if (string.Equals(Path.GetExtension(solutionOrProjectPath), ".sln", StringComparison.OrdinalIgnoreCase))
-                solution = await workspace.OpenSolutionAsync(solutionOrProjectPath, cancellationToken: cancellationToken).ConfigureAwait(false);
-            else
-                solution = (await workspace.OpenProjectAsync(solutionOrProjectPath, cancellationToken: cancellationToken).ConfigureAwait(false)).Solution;
+        // Treat warnings as errors (GeneralDiagnosticOption)
+        if (options.GeneralDiagnosticOption == ReportDiagnostic.Error && severity == DiagnosticSeverity.Warning)
+            severity = DiagnosticSeverity.Error;
 
-            if (solution is null)
-                return "Error: failed to open solution.";
+        return (severity, false);
+    }
 
-            var allDiagnostics = new List<Diagnostic>();
-            foreach (var project in solution.Projects)
+    /// <summary>Парсит .slnx: возвращает полные пути к .csproj (относительные пути разрешаются от каталога slnx).</summary>
+    private static IReadOnlyList<string> GetProjectPathsFromSlnx(string slnxPath)
+    {
+        var dir = Path.GetDirectoryName(slnxPath) ?? "";
+        var xml = XDocument.Load(slnxPath);
+        var projects = xml.Root?
+            .Elements("Project")
+            .Select(e => (string?)e.Attribute("Path"))
+            .Where(p => !string.IsNullOrWhiteSpace(p))
+            .Select(p => Path.GetFullPath(Path.Combine(dir, p!.Trim())))
+            .Where(File.Exists)
+            .ToList() ?? [];
+        return projects;
+    }
+
+    private static async Task<(int totalAfterPath, int excludedSeverityNone, int excludedSuppress)> CollectDiagnosticsFromSolution(
+        Solution solution,
+        string? targetPath,
+        List<(Diagnostic d, DiagnosticSeverity effectiveSeverity)> allDiagnostics,
+        CancellationToken cancellationToken)
+    {
+        var totalAfterPath = 0;
+        var excludedSeverityNone = 0;
+        var excludedSuppress = 0;
+        foreach (var project in solution.Projects)
             {
                 cancellationToken.ThrowIfCancellationRequested();
+                var projectDir = Path.GetDirectoryName(project.FilePath) ?? "";
+                var severityNoneIds = EditorConfigStyle.GetDiagnosticIdsSeverityNone(projectDir);
+
                 var comp = await project.GetCompilationAsync(cancellationToken).ConfigureAwait(false);
                 if (comp is null) continue;
+                var compOptions = comp.Options;
+
                 foreach (var d in comp.GetDiagnostics(cancellationToken))
                 {
                     if (d.Location.SourceTree?.FilePath is null) continue;
@@ -68,7 +93,11 @@ public static class GetDiagnostics
                     if (IsBuildArtifactPath(treePath)) continue;
                     if (targetPath is not null && !string.Equals(treePath, targetPath, StringComparison.OrdinalIgnoreCase))
                         continue;
-                    allDiagnostics.Add(d);
+                    totalAfterPath++;
+                    if (severityNoneIds.Contains(d.Id)) { excludedSeverityNone++; continue; }
+                    var (effective, isSuppressed) = GetEffectiveSeverity(d, compOptions);
+                    if (isSuppressed) { excludedSuppress++; continue; }
+                    allDiagnostics.Add((d, effective));
                 }
                 var analyzers = project.AnalyzerReferences
                     .SelectMany(r => r.GetAnalyzers(project.Language))
@@ -91,19 +120,103 @@ public static class GetDiagnostics
                         if (IsBuildArtifactPath(treePath)) continue;
                         if (targetPath is not null && !string.Equals(treePath, targetPath, StringComparison.OrdinalIgnoreCase))
                             continue;
-                        allDiagnostics.Add(d);
+                        totalAfterPath++;
+                        if (severityNoneIds.Contains(d.Id)) { excludedSeverityNone++; continue; }
+                        var (effective, isSuppressed) = GetEffectiveSeverity(d, compOptions);
+                        if (isSuppressed) { excludedSuppress++; continue; }
+                        allDiagnostics.Add((d, effective));
                     }
                 }
             }
+        return (totalAfterPath, excludedSeverityNone, excludedSuppress);
+    }
 
-            var sb = new StringBuilder();
+    public static async Task<string> GetDiagnosticsAsync(
+        string solutionOrProjectPath,
+        string? filePath,
+        CancellationToken cancellationToken = default)
+    {
+        if (!File.Exists(solutionOrProjectPath))
+            return $"Error: solution/project not found: {solutionOrProjectPath}";
+
+        string? targetPath = null;
+        if (!string.IsNullOrWhiteSpace(filePath))
+        {
+            if (!File.Exists(filePath))
+                return $"Error: file not found: {filePath}";
+            targetPath = NormalizePath(filePath);
+        }
+
+        var allDiagnostics = new List<(Diagnostic d, DiagnosticSeverity effectiveSeverity)>();
+        var totalAfterPath = 0;
+        var excludedSeverityNone = 0;
+        var excludedSuppress = 0;
+
+        var ext = Path.GetExtension(solutionOrProjectPath);
+        if (string.Equals(ext, ".slnx", StringComparison.OrdinalIgnoreCase))
+        {
+            var projectPaths = GetProjectPathsFromSlnx(solutionOrProjectPath);
+            if (projectPaths.Count == 0)
+                return "Error: .slnx contains no valid project paths or files not found.";
+
+            foreach (var projectPath in projectPaths)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                var workspace = MSBuildWorkspace.Create();
+                try
+                {
+                    var solution = (await workspace.OpenProjectAsync(projectPath, cancellationToken: cancellationToken).ConfigureAwait(false)).Solution;
+                    if (solution is not null)
+                    {
+                        var (t, n, s) = await CollectDiagnosticsFromSolution(solution, targetPath, allDiagnostics, cancellationToken).ConfigureAwait(false);
+                        totalAfterPath += t;
+                        excludedSeverityNone += n;
+                        excludedSuppress += s;
+                    }
+                }
+                finally
+                {
+                    workspace.Dispose();
+                }
+            }
+        }
+        else
+        {
+            Solution? solution = null;
+            try
+            {
+                var workspace = MSBuildWorkspace.Create();
+                if (string.Equals(ext, ".sln", StringComparison.OrdinalIgnoreCase))
+                    solution = await workspace.OpenSolutionAsync(solutionOrProjectPath, cancellationToken: cancellationToken).ConfigureAwait(false);
+                else
+                    solution = (await workspace.OpenProjectAsync(solutionOrProjectPath, cancellationToken: cancellationToken).ConfigureAwait(false)).Solution;
+
+                if (solution is null)
+                    return "Error: failed to open solution.";
+
+                var (t, n, s) = await CollectDiagnosticsFromSolution(solution, targetPath, allDiagnostics, cancellationToken).ConfigureAwait(false);
+                totalAfterPath += t;
+                excludedSeverityNone += n;
+                excludedSuppress += s;
+            }
+            finally
+            {
+                solution?.Workspace.Dispose();
+            }
+        }
+
+        var sb = new StringBuilder();
             sb.AppendLine("# Diagnostics (compiler + analyzers)");
+            if (string.Equals(Path.GetExtension(solutionOrProjectPath), ".slnx", StringComparison.OrdinalIgnoreCase))
+                sb.AppendLine($"# Solution: {solutionOrProjectPath}");
+            sb.AppendLine("# Filtered by .editorconfig (severity = none) and CompilationOptions (Suppress); severity = effective (incl. TreatWarningsAsErrors).");
+            sb.AppendLine($"# Total (after path filter): {totalAfterPath}; excluded: severity=none {excludedSeverityNone}, Suppress {excludedSuppress}; shown: {allDiagnostics.Count}");
             if (targetPath is not null)
                 sb.AppendLine($"# File: {filePath}");
             sb.AppendLine("# Format: file:line:column severity id — message");
             sb.AppendLine();
 
-            foreach (var d in allDiagnostics.OrderBy(x => x.Location.SourceTree?.FilePath ?? "").ThenBy(x => x.Location.SourceSpan.Start))
+            foreach (var (d, effectiveSeverity) in allDiagnostics.OrderBy(x => x.d.Location.SourceTree?.FilePath ?? "").ThenBy(x => x.d.Location.SourceSpan.Start))
             {
                 var tree = d.Location.SourceTree;
                 var file = tree?.FilePath ?? "(no file)";
@@ -115,7 +228,7 @@ public static class GetDiagnostics
                     line = lineSpan.StartLinePosition.Line + 1;
                     column = lineSpan.StartLinePosition.Character + 1;
                 }
-                var severity = d.Severity switch
+                var severityStr = effectiveSeverity switch
                 {
                     DiagnosticSeverity.Error => "error",
                     DiagnosticSeverity.Warning => "warning",
@@ -123,7 +236,7 @@ public static class GetDiagnostics
                     DiagnosticSeverity.Hidden => "hidden",
                     _ => "unknown"
                 };
-                sb.AppendLine($"{file}:{line}:{column} {severity} {d.Id} — {d.GetMessage()}");
+                sb.AppendLine($"{file}:{line}:{column} {severityStr} {d.Id} — {d.GetMessage()}");
             }
 
             sb.AppendLine();
@@ -136,14 +249,5 @@ public static class GetDiagnostics
                 sb.AppendLine($"Total: {allDiagnostics.Count}");
 
             return sb.ToString();
-        }
-        catch (InvalidOperationException ex) when (ex.Message.Contains("slnx") || ex.Message.Contains("Slnx"))
-        {
-            return "Error: .slnx format is not supported. Use .sln or open by .csproj.";
-        }
-        finally
-        {
-            solution?.Workspace.Dispose();
-        }
     }
 }
