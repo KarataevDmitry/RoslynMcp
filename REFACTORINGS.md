@@ -65,3 +65,4 @@
 
 - **`roslyn_generate_interface_from_class`** — по позиции на класс генерирует C# интерфейс (все public методы/свойства/события или только из `member_names`), записывает в файл или возвращает текст. Дальше: добавить классу `: IName` и применить code action «Implement interface» (диалога там нет).
 - **`roslyn_generate_base_class_from_class`** — по позиции на класс генерирует абстрактный базовый класс (выбранные public-члены становятся `protected abstract`). Опционально: `base_class_name`, `output_file_path`, `member_names`. Дальше: добавить классу `: BaseName` и проставить `override` у членов.
+- **`roslyn_generate_overrides`** — Generate Overrides без диалога: по позиции на класс собирает виртуальные/абстрактные члены базового типа (ещё не переопределённые), генерирует override-заглушки. Опционально: `member_names`, `insert_into_file` (вставить в тело класса перед `}`).

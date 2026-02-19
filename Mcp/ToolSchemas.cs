@@ -202,4 +202,20 @@ public static class ToolSchemas
             },
             required = new[] { "solution_or_project_path", "file_path", "line", "column" }
         });
+
+    public static JsonElement GenerateOverrides() =>
+        ToElement(new
+        {
+            type = "object",
+            properties = new
+            {
+                solution_or_project_path = new { type = "string", description = "Путь к .sln или .csproj." },
+                file_path = new { type = "string", description = "Путь к .cs файлу с классом (с базовым типом)." },
+                line = new { type = "integer", description = "Строка (1-based): курсор на имени класса или внутри тела." },
+                column = new { type = "integer", description = "Столбец (1-based)." },
+                member_names = new { type = "array", items = new { type = "string" }, description = "Опционально. Массив имён методов/свойств/событий базового типа для генерации override. Если не задан — все виртуальные/абстрактные, ещё не переопределённые." },
+                insert_into_file = new { type = "boolean", description = "Опционально. true — вставить сгенерированные override в тело класса перед закрывающей скобкой; false (по умолчанию) — только вернуть текст для вставки вручную." }
+            },
+            required = new[] { "solution_or_project_path", "file_path", "line", "column" }
+        });
 }

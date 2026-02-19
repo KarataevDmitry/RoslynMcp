@@ -92,6 +92,7 @@ claude mcp add --transport stdio roslyn -- dotnet run --project .
 | `roslyn_get_solution_structure` | Список проектов в solution (имя, путь к .csproj). Параметр: `solution_or_project_path` (.sln или .csproj). Для реп с только .slnx: передай путь к главному .csproj — вернётся список подгруженных проектов. |
 | `roslyn_generate_interface_from_class` | Сгенерировать C# интерфейс по классу **без диалогов** (обходной путь для Extract Interface). Позиция на класс: `solution_or_project_path`, `file_path`, `line`, `column`. Опционально: `interface_name`, `output_file_path`, `member_names` (массив). Дальше вручную или через code action добавь классу `: IName` и примени «Implement interface». |
 | `roslyn_generate_base_class_from_class` | Сгенерировать абстрактный базовый класс по классу **без диалогов** (обходной путь для Extract Base Class). Позиция на класс: `solution_or_project_path`, `file_path`, `line`, `column`. Опционально: `base_class_name`, `output_file_path`, `member_names` (массив). Дальше: добавить классу `: BaseName` и проставить `override` у членов. |
+| `roslyn_generate_overrides` | **Generate Overrides** без диалога: по позиции на класс генерирует override виртуальных/абстрактных членов базового типа. Опционально: `member_names` (массив), `insert_into_file` (true — вставить в тело класса). |
 
 ## Лицензия
 
