@@ -59,6 +59,14 @@
 3. **Extract interface / Extract base class:** передавай те же **line/column** (или диапазон по классу), затем при apply — **action_options** с ожидаемыми полями (имя типа, массив имён членов и т.д.), если удаётся подобрать рабочий набор свойств для твоей версии Roslyn.
 4. Для остальных рефакторингов с диалогом — пробуй **action_options** по аналогии; при ошибках смотри сообщение и при необходимости проверяй тип опций в отладчике.
 
+## Стиль кода (.editorconfig)
+
+Обходные тулы, генерирующие код, читают **.editorconfig** от каталога файла вверх по дереву (ближайший переопределяет). Учитываются в `[*.cs]`: `dotnet_style_predefined_type_for_*` (типы), `indent_style`/`indent_size`/`tab_width` (отступ при вставке), `csharp_style_var_*`, `csharp_prefer_braces`, `csharp_new_line_before_open_brace`. Generate constructor не включает backing-поля, если есть свойство с тем же именем.
+
+**Выдача roslyn_get_diagnostics** учитывает .editorconfig целевого решения: для каждого проекта читается .editorconfig от каталога .csproj вверх; диагностики с `dotnet_diagnostic.<Id>.severity = none` не включаются в вывод; диагностики уровня Hidden от анализаторов тоже отфильтровываются — мусора меньше.
+
+**В репозитории roslyn-mcp** в корне лежит свой `.editorconfig`: стиль и **severities** анализаторов (IDE0049, IDE0055, naming, CS0219 и др. — suggestion/warning/none). Сборка с `EnforceCodeStyleInBuild` и `AnalysisLevel` применяет эти правила.
+
 ## Обходные тулы (без диалогов)
 
 Рефакторинги вроде Extract Interface / Extract Base Class в Roslyn требуют диалога (выбор членов, имя). MCP-сервер не показывает окна, поэтому добавлены **отдельные тулы**, которые делают то же по параметрам:

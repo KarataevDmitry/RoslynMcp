@@ -76,6 +76,19 @@ claude mcp add --transport stdio roslyn -- dotnet run --project .
 
 Путь к `command` каждый подставляет свой (или используй переменные окружения, если Claude Code их поддерживает в `.mcp.json`). После сохранения Claude Code предложит доверять серверу; в чате можно проверить статус командой `/mcp`.
 
+## Стиль кода и .editorconfig
+
+Генераторы кода (конструктор, override, интерфейс, базовый класс) учитывают **.editorconfig** в каталоге файла и выше (ближайший к файлу переопределяет). Учитываются опции в `[*.cs]`:
+
+- **Типы:** `dotnet_style_predefined_type_for_locals_parameters_members`, `dotnet_style_predefined_type_for_member_access` — ключевые слова C# (`int`, `string`, …) vs .NET (`Int32`, `String`).
+- **Отступы:** `indent_style`, `indent_size`, `tab_width` — при вставке в файл используется отступ из файла, при его отсутствии — из .editorconfig.
+- **var:** `csharp_style_var_for_built_in_types`, `csharp_style_var_when_type_is_apparent`, `csharp_style_var_elsewhere` — зарезервировано для будущего использования в генерируемом коде.
+- **Скобки и переносы:** `csharp_prefer_braces`, `csharp_new_line_before_open_brace` — зарезервировано для форматирования блоков.
+
+В **Generate constructor** не добавляются backing-поля, если для них уже есть свойство (например `_source` при наличии `Source`).
+
+**Сам проект RoslynMcp** имеет свой `.editorconfig` в корне: стиль (indent, типы, var, скобки) и **severities анализаторов** (IDE0049, IDE0055, CS0219, naming и т.д. — suggestion/warning/info/hidden/none). Сборка с `EnforceCodeStyleInBuild` и `AnalysisLevel` учитывает эти настройки.
+
 ## Инструменты (tools)
 
 | Инструмент | Описание |
@@ -88,7 +101,7 @@ claude mcp add --transport stdio roslyn -- dotnet run --project .
 | `roslyn_rename` | Переименование символа по solution. Параметры: `solution_or_project_path`, `file_path`, `line`, `column`, `new_name`, опционально `apply` (превью/запись), `rename_in_comments`, `rename_in_strings`, `rename_overloads`, `rename_file` (аналог опций в VS). |
 | `roslyn_get_code_actions` | Список Quick Actions / рефакторингов в позиции (как лампочка в VS). Параметры: `solution_or_project_path`, `file_path`, `line`, `column`. Опционально `end_line`, `end_column` — диапазон выделения для рефакторингов вроде Extract method / Extract local function. Возвращает нумерованный список. |
 | `roslyn_apply_code_action` | Применить выбранное code action. Параметры: `solution_or_project_path`, `file_path`, `line`, `column`, `action_index` (0-based). Опционально: `end_line`, `end_column` (тот же диапазон, что при get); `fix_all_scope`: `"document"` \| `"project"` \| `"solution"`; `constant_name` — для Introduce constant; `action_options` — JSON-объект опций для действий с диалогом (Extract interface, Extract base class: имена членов и т.д.). Подробнее: [REFACTORINGS.md](REFACTORINGS.md). |
-| `roslyn_get_diagnostics` | Диагностики компиляции и анализаторов по solution/project. Предпочтительно использовать вместо разбора логов сборки. Чтобы исправить: вызвать `roslyn_get_code_actions` по file:line:column из ответа, затем `roslyn_apply_code_action` (или fix_all_scope). Параметры: `solution_or_project_path`, опционально `file_path` — только по одному файлу. |
+| `roslyn_get_diagnostics` | Диагностики компиляции и анализаторов по solution/project. Учитывается .editorconfig целевого проекта: исключаются диагностики с `dotnet_diagnostic.<Id>.severity = none` и уровень Hidden от анализаторов. Параметры: `solution_or_project_path`, опционально `file_path`. |
 | `roslyn_get_solution_structure` | Список проектов в solution (имя, путь к .csproj). Параметр: `solution_or_project_path` (.sln или .csproj). Для реп с только .slnx: передай путь к главному .csproj — вернётся список подгруженных проектов. |
 | `roslyn_generate_interface_from_class` | Сгенерировать C# интерфейс по классу **без диалогов** (обходной путь для Extract Interface). Позиция на класс: `solution_or_project_path`, `file_path`, `line`, `column`. Опционально: `interface_name`, `output_file_path`, `member_names` (массив). Дальше вручную или через code action добавь классу `: IName` и примени «Implement interface». |
 | `roslyn_generate_base_class_from_class` | Сгенерировать абстрактный базовый класс по классу **без диалогов** (обходной путь для Extract Base Class). Позиция на класс: `solution_or_project_path`, `file_path`, `line`, `column`. Опционально: `base_class_name`, `output_file_path`, `member_names` (массив). Дальше: добавить классу `: BaseName` и проставить `override` у членов. |
