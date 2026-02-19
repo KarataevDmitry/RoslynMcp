@@ -94,6 +94,7 @@ claude mcp add --transport stdio roslyn -- dotnet run --project .
 | `roslyn_generate_base_class_from_class` | Сгенерировать абстрактный базовый класс по классу **без диалогов** (обходной путь для Extract Base Class). Позиция на класс: `solution_or_project_path`, `file_path`, `line`, `column`. Опционально: `base_class_name`, `output_file_path`, `member_names` (массив). Дальше: добавить классу `: BaseName` и проставить `override` у членов. |
 | `roslyn_generate_overrides` | **Generate Overrides** без диалога: по позиции на класс генерирует override виртуальных/абстрактных членов базового типа. Опционально: `member_names` (массив), `insert_into_file` (true — вставить в тело класса). |
 | `roslyn_generate_constructor_from_members` | **Generate constructor** без диалога: по позиции на класс генерирует конструктор по instance полям и свойствам с set. Опционально: `member_names`, `insert_into_file`. |
+| `roslyn_generate_equals_gethashcode` | **Generate Equals and GetHashCode** без диалога: по позиции на класс генерирует override Equals/GetHashCode по выбранным полям/свойствам. Опционально: `member_names`, `insert_into_file`. |
 
 ## Лицензия
 
