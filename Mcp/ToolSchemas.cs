@@ -218,4 +218,20 @@ public static class ToolSchemas
             },
             required = new[] { "solution_or_project_path", "file_path", "line", "column" }
         });
+
+    public static JsonElement GenerateConstructorFromMembers() =>
+        ToElement(new
+        {
+            type = "object",
+            properties = new
+            {
+                solution_or_project_path = new { type = "string", description = "Путь к .sln или .csproj." },
+                file_path = new { type = "string", description = "Путь к .cs файлу с классом." },
+                line = new { type = "integer", description = "Строка (1-based): курсор на имени класса или внутри тела." },
+                column = new { type = "integer", description = "Столбец (1-based)." },
+                member_names = new { type = "array", items = new { type = "string" }, description = "Опционально. Массив имён полей/свойств (с сеттером) для параметров конструктора и присвоений. Если не задан — все instance поля и свойства с set." },
+                insert_into_file = new { type = "boolean", description = "Опционально. true — вставить конструктор в тело класса; false (по умолчанию) — только вернуть текст." }
+            },
+            required = new[] { "solution_or_project_path", "file_path", "line", "column" }
+        });
 }
