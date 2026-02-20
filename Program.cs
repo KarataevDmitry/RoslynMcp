@@ -26,7 +26,8 @@ var options = new McpServerOptions
             try
             {
                 var text = await ToolHandlers.HandleAsync(name, args, cancellationToken).ConfigureAwait(false);
-                return new CallToolResult { Content = [new TextContentBlock { Text = text }] };
+                var isError = text.StartsWith("Error:", StringComparison.OrdinalIgnoreCase);
+                return new CallToolResult { Content = [new TextContentBlock { Text = text }], IsError = isError };
             }
             catch (ArgumentException ex)
             {
