@@ -1,3 +1,4 @@
+using System.Linq;
 using System.Text;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.MSBuild;
@@ -17,6 +18,53 @@ public static class RenameSymbol
         return p;
     }
 
+    /// <summary>Топ-уровневый class/struct/interface: можно согласовать имена partial-файлов TypeName.cs и TypeName.*.cs.</summary>
+    private static bool IsTopLevelNamedTypeForPartialFileRename(ISymbol symbol) =>
+        symbol is INamedTypeSymbol { ContainingType: null } nt
+        && nt.TypeKind is TypeKind.Class or TypeKind.Struct or TypeKind.Interface;
+
+    /// <summary>
+    /// Переименовать путь к файлу с префиксом имени типа: <c>TypeName.cs</c>, <c>TypeName.Part.cs</c> → <c>NewName...</c>.
+    /// </summary>
+    private static bool TryComputeRenamedTypeFilePath(string fullPath, string oldTypeName, string newTypeName, out string newFullPath)
+    {
+        newFullPath = "";
+        var fileName = Path.GetFileName(fullPath);
+        if (!fileName.EndsWith(".cs", StringComparison.OrdinalIgnoreCase))
+            return false;
+
+        var baseName = Path.GetFileNameWithoutExtension(fileName);
+        var dir = Path.GetDirectoryName(fullPath) ?? "";
+
+        if (string.Equals(baseName, oldTypeName, StringComparison.OrdinalIgnoreCase))
+        {
+            newFullPath = Path.Combine(dir, newTypeName + ".cs");
+            return !PathsEqualNormalized(fullPath, newFullPath);
+        }
+
+        var prefix = oldTypeName + ".";
+        if (baseName.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+        {
+            var rest = baseName.Substring(prefix.Length);
+            newFullPath = Path.Combine(dir, newTypeName + "." + rest + ".cs");
+            return !PathsEqualNormalized(fullPath, newFullPath);
+        }
+
+        return false;
+    }
+
+    private static bool PathsEqualNormalized(string a, string b)
+    {
+        try
+        {
+            return string.Equals(Path.GetFullPath(a), Path.GetFullPath(b), StringComparison.OrdinalIgnoreCase);
+        }
+        catch
+        {
+            return string.Equals(a.Trim(), b.Trim(), StringComparison.OrdinalIgnoreCase);
+        }
+    }
+
     public static async Task<string> RenameAsync(
         string solutionOrProjectPath,
         string filePath,
@@ -28,6 +76,7 @@ public static class RenameSymbol
         bool renameInStrings = false,
         bool renameOverloads = false,
         bool renameFile = false,
+        bool renamePartialTypeFiles = false,
         CancellationToken cancellationToken = default)
     {
         if (!File.Exists(solutionOrProjectPath))
@@ -74,23 +123,25 @@ public static class RenameSymbol
 
             var node = root.FindToken(position, findInsideTrivia: true).Parent;
             ISymbol? symbol = null;
-            while (node != null)
+            while (node is not null)
             {
                 cancellationToken.ThrowIfCancellationRequested();
                 symbol = semanticModel.GetDeclaredSymbol(node, cancellationToken) ?? semanticModel.GetSymbolInfo(node, cancellationToken).Symbol;
-                if (symbol != null) break;
+                if (symbol is not null)
+                    break;
                 node = node.Parent;
             }
             if (symbol is null)
                 return $"No symbol at {filePath}:{line}:{column}.";
 
+            var oldTypeName = symbol.Name;
             var options = new SymbolRenameOptions(renameOverloads, renameInStrings, renameInComments, renameFile);
             var newSolution = await Renamer.RenameSymbolAsync(solution, symbol, options, newName, cancellationToken).ConfigureAwait(false);
 
             var sb = new StringBuilder();
             var docPath = document.FilePath ?? filePath;
             sb.AppendLine($"# Document: {docPath} (total_lines={lines.Count}, line_{line}_length={lineLen})");
-            sb.AppendLine($"# Rename {symbol.Kind} {symbol.Name} → {newName}");
+            sb.AppendLine($"# Rename {symbol.Kind} {oldTypeName} → {newName}");
             sb.AppendLine();
 
             var changed = new List<Document>();
@@ -98,9 +149,11 @@ public static class RenameSymbol
             {
                 foreach (var doc in project.Documents)
                 {
-                    if (doc.FilePath is null) continue;
+                    if (doc.FilePath is null)
+                        continue;
                     var oldDoc = solution.GetDocument(doc.Id);
-                    if (oldDoc is null) continue;
+                    if (oldDoc is null)
+                        continue;
                     var oldText = await oldDoc.GetTextAsync(cancellationToken).ConfigureAwait(false);
                     var newText = await doc.GetTextAsync(cancellationToken).ConfigureAwait(false);
                     if (!oldText.ContentEquals(newText))
@@ -108,9 +161,53 @@ public static class RenameSymbol
                 }
             }
 
+            List<(string OldPath, string NewPath)>? partialRenames = null;
+            if (renamePartialTypeFiles)
+            {
+                if (!IsTopLevelNamedTypeForPartialFileRename(symbol))
+                {
+                    sb.AppendLine("# rename_partial_type_files: skipped (not a top-level class/struct/interface).");
+                    sb.AppendLine();
+                }
+                else
+                {
+                    var proj = newSolution.GetProject(document.Project.Id);
+                    partialRenames = [];
+                    if (proj is null)
+                    {
+                        sb.AppendLine("# rename_partial_type_files: skipped (project not found in new solution).");
+                        sb.AppendLine();
+                    }
+                    else
+                    {
+                        foreach (var doc in proj.Documents)
+                        {
+                            var p = doc.FilePath;
+                            if (p is null || !p.EndsWith(".cs", StringComparison.OrdinalIgnoreCase))
+                                continue;
+                            if (TryComputeRenamedTypeFilePath(p, oldTypeName, newName, out var newP))
+                                partialRenames.Add((p, newP));
+                        }
+
+                        if (partialRenames.Count == 0)
+                        {
+                            sb.AppendLine("# rename_partial_type_files: no matching TypeName.cs / TypeName.*.cs files in project.");
+                            sb.AppendLine();
+                        }
+                        else
+                        {
+                            sb.AppendLine("# rename_partial_type_files (disk path renames after symbol rename):");
+                            foreach (var (o, n) in partialRenames)
+                                sb.AppendLine($"  {o} → {n}");
+                            sb.AppendLine();
+                        }
+                    }
+                }
+            }
+
             if (changed.Count == 0)
             {
-                sb.AppendLine("(no changes)");
+                sb.AppendLine("(no text changes)");
                 return sb.ToString();
             }
 
@@ -124,14 +221,51 @@ public static class RenameSymbol
                     applied.Add(doc.FilePath!);
                 }
                 else
+                {
                     sb.AppendLine(doc.FilePath);
+                }
             }
 
             if (apply)
             {
-                sb.AppendLine("Applied to:");
+                sb.AppendLine("Applied text to:");
                 foreach (var p in applied)
                     sb.AppendLine("  " + p);
+
+                if (renamePartialTypeFiles && partialRenames is { Count: > 0 })
+                {
+                    sb.AppendLine("Partial file renames:");
+                    foreach (var (oldPath, newPath) in partialRenames.OrderByDescending(x => x.OldPath.Length))
+                    {
+                        try
+                        {
+                            if (!File.Exists(oldPath) && File.Exists(newPath))
+                            {
+                                sb.AppendLine($"  (already at target, skip) {newPath}");
+                                continue;
+                            }
+
+                            if (!File.Exists(oldPath))
+                            {
+                                sb.AppendLine($"  Warning: source missing, skip: {oldPath}");
+                                continue;
+                            }
+
+                            if (File.Exists(newPath))
+                            {
+                                sb.AppendLine($"  Error: target exists: {newPath}");
+                                continue;
+                            }
+
+                            File.Move(oldPath, newPath);
+                            sb.AppendLine($"  {oldPath} → {newPath}");
+                        }
+                        catch (Exception ex)
+                        {
+                            sb.AppendLine($"  Error ({oldPath}): {ex.Message}");
+                        }
+                    }
+                }
             }
             else
             {

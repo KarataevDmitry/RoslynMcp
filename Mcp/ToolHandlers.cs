@@ -101,7 +101,8 @@ public static class ToolHandlers
         var renameInStrings = args.TryGetValue("rename_in_strings", out var risEl) && risEl.ValueKind == JsonValueKind.True;
         var renameOverloads = args.TryGetValue("rename_overloads", out var roEl) && roEl.ValueKind == JsonValueKind.True;
         var renameFile = args.TryGetValue("rename_file", out var rfEl) && rfEl.ValueKind == JsonValueKind.True;
-        return await RenameSymbol.RenameAsync(solutionPath!, filePath!, line, column, newName!, apply, renameInComments, renameInStrings, renameOverloads, renameFile, ct).ConfigureAwait(false);
+        var renamePartialTypeFiles = args.TryGetValue("rename_partial_type_files", out var rptfEl) && rptfEl.ValueKind == JsonValueKind.True;
+        return await RenameSymbol.RenameAsync(solutionPath!, filePath!, line, column, newName!, apply, renameInComments, renameInStrings, renameOverloads, renameFile, renamePartialTypeFiles, ct).ConfigureAwait(false);
     }
 
     private static Task<string> GetCodeActionsAsync(IReadOnlyDictionary<string, JsonElement> args, CancellationToken ct)

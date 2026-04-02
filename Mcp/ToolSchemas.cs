@@ -79,7 +79,8 @@ public static class ToolSchemas
                 rename_in_comments = new { type = "boolean", description = "Переименовывать вхождения в комментариях (как в VS «Include comments»)." },
                 rename_in_strings = new { type = "boolean", description = "Переименовывать вхождения в строковых литералах." },
                 rename_overloads = new { type = "boolean", description = "Для метода — переименовать и перегрузки." },
-                rename_file = new { type = "boolean", description = "Для типа — переименовать файл с объявлением." }
+                rename_file = new { type = "boolean", description = "Для типа — переименовать файл с объявлением (как в VS)." },
+                rename_partial_type_files = new { type = "boolean", description = "После переименования топ-уровневого class/struct/interface: переименовать на диске все TypeName.cs и TypeName.*.cs в проекте в NewName.cs / NewName.*.cs (partial). После записи текста Roslyn." }
             },
             required = new[] { "solution_or_project_path", "file_path", "line", "column", "new_name" }
         });
