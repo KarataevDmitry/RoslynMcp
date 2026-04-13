@@ -2,7 +2,11 @@
 
 MCP-сервер для помощи агенту при рефакторинге C#: доступ к **Roslyn** (синтаксические деревья, семантика, символы, find usages, rename, code actions). Цель — стабильный тул без глюков (альтернатива Bifrost).
 
-**Текущий статус:** работают `roslyn_ping`, `roslyn_get_document_symbols`, `roslyn_get_symbol_at_position`, `roslyn_find_usages`, `roslyn_go_to_definition`, `roslyn_rename`, `roslyn_get_code_actions`, `roslyn_apply_code_action`, `roslyn_get_diagnostics`.
+**Текущий статус:** работают `roslyn_ping`, `roslyn_get_document_symbols`, `roslyn_get_symbol_at_position`, `roslyn_find_usages`, `roslyn_go_to_definition`, `roslyn_rename`, `roslyn_get_code_actions`, `roslyn_apply_code_action`, `roslyn_get_diagnostics`, `roslyn_get_workspace_navigation_context` (эвристики «связанных файлов» по MSBuild solution; не эквивалентно Cascade IDE — см. описание тула).
+
+### Семантическая навигация (`roslyn_get_workspace_navigation_context`)
+
+Источник файлов — документы, которые поднимает **MSBuildWorkspace** по переданному `.sln`/`.csproj`, а не дерево обозревателя Cascade и не `.cascade/workspace.toml`. Встроенные пресеты с теми же **id**, что у Cascade (`peers_only`, `no_namespace_noise`, `tests_and_peers`, `structure_only`), задаются только аргументом `preset` или полностью своими `include_kinds` / `exclude_kinds`.
 
 **Backlog и идеи по тулам** ведутся в каноне заметок: `knowledge/work/projects/door-to-singularity/roslyn-mcp/README.md` в репозитории **agent-notes** (не дублировать длинный текст в этом репо).
 
