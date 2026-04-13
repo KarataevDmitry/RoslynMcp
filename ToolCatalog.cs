@@ -71,6 +71,13 @@ internal static class ToolCatalog
         },
         new()
         {
+            Name = "roslyn_get_workspace_navigation_context",
+            Description =
+                "Семантическая навигация по solution (связанные файлы): режимы related и subgraph. Файлы из MSBuildWorkspace, эвристики как в Cascade IDE, но без .cascade/workspace.toml и без дерева IDE — только аргументы и встроенные пресеты (peers_only, no_namespace_noise, tests_and_peers, structure_only). Параметры: solution_or_project_path, file_path (якорь), mode; опционально line, column, max_*, include_kinds, exclude_kinds, preset.",
+            InputSchema = ToolSchemas.WorkspaceNavigationContext()
+        },
+        new()
+        {
             Name = "roslyn_sync_namespaces",
             Description =
                 "Привести объявления namespace к структуре папок (RootNamespace + путь). Вызывать после переименования или перемещения папок в C# проекте: сначала dry_run для превью, затем без dry_run для применения. Обновляет также using в остальных файлах. Параметры: solution_or_project_path; опционально project_path, dry_run.",

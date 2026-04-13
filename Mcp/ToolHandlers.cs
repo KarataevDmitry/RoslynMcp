@@ -23,6 +23,7 @@ public static class ToolHandlers
             "roslyn_apply_code_action" => ApplyCodeActionAsync(args, cancellationToken),
             "roslyn_get_diagnostics" => GetDiagnosticsAsync(args, cancellationToken),
             "roslyn_get_solution_structure" => GetSolutionStructureAsync(args, cancellationToken),
+            "roslyn_get_workspace_navigation_context" => GetWorkspaceNavigationContextAsync(args, cancellationToken),
             "roslyn_sync_namespaces" => SyncNamespacesAsync(args, cancellationToken),
             "roslyn_sync_dependent_upon_partials" => SyncDependentUponPartialsAsync(args, cancellationToken),
             "roslyn_resolve_breakpoint" => ResolveBreakpointAsync(args, cancellationToken),
@@ -189,6 +190,46 @@ public static class ToolHandlers
         if (!TryGetString(args, "solution_or_project_path", out var solutionPath))
             throw new ArgumentException("solution_or_project_path (string) is required.");
         return GetSolutionStructure.GetStructureAsync(solutionPath!, ct);
+    }
+
+    private static Task<string> GetWorkspaceNavigationContextAsync(IReadOnlyDictionary<string, JsonElement> args, CancellationToken ct)
+    {
+        if (!TryGetString(args, "solution_or_project_path", out var solutionPath))
+            throw new ArgumentException("solution_or_project_path (string) is required.");
+        if (!TryGetString(args, "file_path", out var filePath))
+            throw new ArgumentException("file_path (string) is required.");
+        if (!TryGetString(args, "mode", out var mode) || string.IsNullOrWhiteSpace(mode))
+            throw new ArgumentException("mode (string: related | subgraph) is required.");
+        int? line = TryGetInt(args, "line", out var l) && l >= 1 ? l : null;
+        int? column = TryGetInt(args, "column", out var c) && c >= 1 ? c : null;
+        var maxRelated = TryGetInt(args, "max_related", out var mr) && mr >= 1 ? mr : GetWorkspaceNavigationContext.DefaultMaxRelated;
+        var maxNodes = TryGetInt(args, "max_nodes", out var mn) && mn >= 1 ? mn : GetWorkspaceNavigationContext.DefaultMaxNodes;
+        var maxEdges = TryGetInt(args, "max_edges", out var me) && me >= 1 ? me : GetWorkspaceNavigationContext.DefaultMaxEdges;
+        IReadOnlyList<string>? includeKinds = TryGetOptionalStringList(args, "include_kinds");
+        IReadOnlyList<string>? excludeKinds = TryGetOptionalStringList(args, "exclude_kinds");
+        TryGetString(args, "preset", out var preset);
+        return GetWorkspaceNavigationContext.GetAsync(
+            solutionPath!,
+            filePath!,
+            mode!,
+            line,
+            column,
+            maxRelated,
+            maxNodes,
+            maxEdges,
+            includeKinds,
+            excludeKinds,
+            string.IsNullOrWhiteSpace(preset) ? null : preset,
+            ct);
+    }
+
+    private static IReadOnlyList<string>? TryGetOptionalStringList(IReadOnlyDictionary<string, JsonElement> args, string key)
+    {
+        if (!args.TryGetValue(key, out var el) || el.ValueKind != JsonValueKind.Array)
+            return null;
+        if (GetStringArray(el) is not string[] arr || arr.Length == 0)
+            return null;
+        return arr;
     }
 
     private static Task<string> SyncNamespacesAsync(IReadOnlyDictionary<string, JsonElement> args, CancellationToken ct)

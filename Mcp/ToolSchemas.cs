@@ -144,6 +144,27 @@ public static class ToolSchemas
             required = new[] { "solution_or_project_path" }
         });
 
+    public static JsonElement WorkspaceNavigationContext() =>
+        ToElement(new
+        {
+            type = "object",
+            properties = new
+            {
+                solution_or_project_path = new { type = "string", description = "Путь к .sln или .csproj — загрузка через MSBuildWorkspace; список файлов берётся из документов solution (не из дерева Cascade IDE)." },
+                file_path = new { type = "string", description = "Якорный файл (полный путь): должен входить в загруженное solution/project." },
+                mode = new { type = "string", description = "related — список связанных файлов; subgraph — узлы и рёбра от якоря." },
+                line = new { type = "integer", description = "Опционально. Строка (1-based), для подписи контекста в JSON." },
+                column = new { type = "integer", description = "Опционально. Столбец (1-based)." },
+                max_related = new { type = "integer", description = "Опционально. Лимит элементов в related (по умолчанию 32)." },
+                max_nodes = new { type = "integer", description = "Опционально. Лимит узлов в subgraph (по умолчанию 12)." },
+                max_edges = new { type = "integer", description = "Опционально. Лимит рёбер в subgraph (по умолчанию 24)." },
+                include_kinds = new { type = "array", items = new { type = "string" }, description = "Опционально. Белый список видов связей (partial_peer, project_peer, …); перезаписывает include пресета." },
+                exclude_kinds = new { type = "array", items = new { type = "string" }, description = "Опционально. Исключаемые виды; с пресетом объединяется по правилам merge." },
+                preset = new { type = "string", description = "Опционально. Встроенный пресет (имена как в Cascade IDE: peers_only, no_namespace_noise, tests_and_peers, structure_only). Без .cascade/workspace.toml — только эти id." }
+            },
+            required = new[] { "solution_or_project_path", "file_path", "mode" }
+        });
+
     public static JsonElement SyncNamespaces() =>
         ToElement(new
         {
