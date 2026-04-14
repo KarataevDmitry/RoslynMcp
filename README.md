@@ -16,7 +16,9 @@ RoslynMcp всегда передаёт в MSBuild свойство **`RoslynMcp
 
 ### Source generators и ложные диагностики (MVVM Toolkit и др.)
 
-Если `roslyn_get_diagnostics` показывает **CS1061** на свойствах/командах из `[ObservableProperty]` / `[RelayCommand]`, а **`dotnet build` зелёный**, это рассогласование Workspace с конвейёром source generators, а не «битый» проект. Описание причины и **что править в ServiceLayer** (не в Mcp handlers): **[docs/source-generators-and-diagnostics.md](docs/source-generators-and-diagnostics.md)**.
+Это **отдельно** от блокировки DLL анализаторов (раздел выше): речь про рассогласование **семантики** с **source generators**, когда `dotnet build` уже зелёный.
+
+Если `roslyn_get_diagnostics` показывает **CS1061** на свойствах/командах из `[ObservableProperty]` / `[RelayCommand]`, а **`dotnet build` зелёный**, это не «битый» проект, а несогласованность загрузки workspace с конвейёром генераторов. Глобальные свойства MSBuild для workspace (в т.ч. отключение design-only сборки) задаются в **`RoslynMcpWorkspaceProperties`** и используются вместе с **`GetSourceGeneratedDocumentsAsync`** в `ServiceLayer/GetDiagnostics.cs`. Подробно — **[docs/source-generators-and-diagnostics.md](docs/source-generators-and-diagnostics.md)**.
 
 ## Требования
 

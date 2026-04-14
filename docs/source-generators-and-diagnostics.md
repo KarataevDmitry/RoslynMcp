@@ -13,7 +13,7 @@
 - Сгенерированные деревья не входят в `Project.Documents`; их нужно получать через `Project.GetSourceGeneratedDocumentsAsync` (см. [документацию API](https://learn.microsoft.com/dotnet/api/microsoft.codeanalysis.project.getsourcegenerateddocumentsasync)).
 - После вызова генераторов обновляется **`Workspace.CurrentSolution`**. Старый снимок `Project` остаётся **без** сгенерированных синтаксических деревьев; компиляция и семантическая модель должны браться из **актуального** решения (`workspace.CurrentSolution.GetProject(projectId)` и далее `GetCompilationAsync` / `GetSemanticModelAsync`).
 - Загрузка solution через `MSBuildWorkspace` должна быть согласована с установленным SDK: пакеты **`Microsoft.CodeAnalysis.*` / `Microsoft.CodeAnalysis.Workspaces.MSBuild`** (в RoslynMcp — **5.3.0**) выровнены под **.NET 10 / SDK 10**; устаревший Workspaces.MSBuild мог давать компиляцию без корректного конвейёра source generators для целевых проектов.
-- Для MSBuild: глобальные свойства `DesignTimeBuild=false` и `SkipCompilerExecution=false`, плюс **`Microsoft.Build.Locator`** до открытия workspace (см. `Program.cs`).
+- Для MSBuild: те же глобальные свойства, что передаёт любой вызов `MSBuildWorkspace` в RoslynMcp — см. **`ServiceLayer/RoslynMcpWorkspaceProperties.cs`** (`DesignTimeBuild=false`, `SkipCompilerExecution=false`, `RoslynMcpWorkspace=true`). Регистрация **`Microsoft.Build.Locator`** до открытия workspace — в `Program.cs`.
 
 ## Реализация в RoslynMcp
 
