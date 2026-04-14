@@ -2,11 +2,13 @@
 
 MCP-сервер для помощи агенту при рефакторинге C#: доступ к **Roslyn** (синтаксические деревья, семантика, символы, find usages, rename, code actions). Цель — стабильный тул без глюков (альтернатива Bifrost).
 
-**Текущий статус:** работают `roslyn_ping`, `roslyn_get_document_symbols`, `roslyn_get_symbol_at_position`, `roslyn_find_usages`, `roslyn_go_to_definition`, `roslyn_rename`, `roslyn_get_code_actions`, `roslyn_apply_code_action`, `roslyn_get_diagnostics`, `roslyn_get_workspace_navigation_context` (эвристики «связанных файлов» по MSBuild solution; не эквивалентно Cascade IDE — см. описание тула).
+**Текущий статус:** работают `roslyn_ping`, `roslyn_get_document_symbols`, `roslyn_get_symbol_at_position`, `roslyn_find_usages`, `roslyn_go_to_definition`, `roslyn_rename`, `roslyn_get_code_actions`, `roslyn_apply_code_action`, `roslyn_get_diagnostics`, `roslyn_get_workspace_navigation_context` (эвристики «связанных файлов» по MSBuild solution; не эквивалентно дереву файлов Cascade IDE — см. описание тула).
+
+## MSBuild workspace
 
 ### Семантическая навигация (`roslyn_get_workspace_navigation_context`)
 
-Источник файлов — документы, которые поднимает **MSBuildWorkspace** по переданному `.sln`/`.csproj`, а не дерево обозревателя Cascade и не `.cascade/workspace.toml`. Встроенные пресеты с теми же **id**, что у Cascade (`peers_only`, `no_namespace_noise`, `tests_and_peers`, `structure_only`), задаются только аргументом `preset` или полностью своими `include_kinds` / `exclude_kinds`.
+Источник файлов — документы, которые поднимает **MSBuildWorkspace** по переданному `.sln`/`.csproj`, а не произвольное дерево из IDE. Встроенные пресеты (`peers_only`, `no_namespace_noise`, `tests_and_peers`, `structure_only`) задаются аргументом `preset` или своими `include_kinds` / `exclude_kinds`.
 
 ### Свойство `RoslynMcpWorkspace` и блокировка DLL анализаторов при `dotnet build`
 
@@ -16,7 +18,9 @@ RoslynMcp всегда передаёт в MSBuild свойство **`RoslynMcp
 
 ### Source generators (MVVM Toolkit и др.)
 
-Для проектов с **source generators** (например `[ObservableProperty]` / `[RelayCommand]` в CommunityToolkit.Mvvm) `roslyn_get_diagnostics` поднимает сгенерированные документы через **`GetSourceGeneratedDocumentsAsync`** и берёт проект/компиляцию из актуального **`workspace.CurrentSolution`** — см. **`ServiceLayer/GetDiagnostics.cs`**; глобальные свойства MSBuild для workspace — в **`RoslynMcpWorkspaceProperties`**. Раньше без этого конвейёра при зелёном **`dotnet build`** иногда возникали ложные **CS1061**; это **учтено в реализации**. Если вывод инструмента всё же расходится со сборкой (краевой случай), ориентир — **`dotnet build`**. Подробнее — **[docs/source-generators-and-diagnostics.md](docs/source-generators-and-diagnostics.md)**.
+Для проектов с **source generators** (например `[ObservableProperty]` / `[RelayCommand]` в CommunityToolkit.Mvvm) `roslyn_get_diagnostics` поднимает сгенерированные документы через **`GetSourceGeneratedDocumentsAsync`** и берёт проект и компиляцию из актуального **`workspace.CurrentSolution`** — см. **`ServiceLayer/GetDiagnostics.cs`**. Глобальные свойства MSBuild те же, что для остальных вызовов `MSBuildWorkspace` в этом сервере (**`RoslynMcpWorkspaceProperties`**).
+
+Раньше без такого конвейёра при зелёном **`dotnet build`** возможны были ложные **CS1061**; в текущей реализации это учтено. Если вывод инструмента всё же расходится со сборкой, ориентир — **`dotnet build`**. Подробнее — **[docs/source-generators-and-diagnostics.md](docs/source-generators-and-diagnostics.md)**.
 
 ## Требования
 
