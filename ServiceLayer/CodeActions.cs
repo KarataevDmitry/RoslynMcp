@@ -373,7 +373,7 @@ public static class CodeActions
         Solution? solution = null;
         try
         {
-            var workspace = MSBuildWorkspace.Create();
+            var workspace = MSBuildWorkspace.Create(RoslynMcpWorkspaceProperties.MsBuild);
             if (string.Equals(Path.GetExtension(solutionOrProjectPath), ".sln", StringComparison.OrdinalIgnoreCase))
                 solution = await workspace.OpenSolutionAsync(solutionOrProjectPath, cancellationToken: cancellationToken).ConfigureAwait(false);
             else
@@ -503,7 +503,7 @@ public static class CodeActions
         Solution? solution = null;
         try
         {
-            var workspace = MSBuildWorkspace.Create();
+            var workspace = MSBuildWorkspace.Create(RoslynMcpWorkspaceProperties.MsBuild);
             if (string.Equals(Path.GetExtension(solutionOrProjectPath), ".sln", StringComparison.OrdinalIgnoreCase))
                 solution = await workspace.OpenSolutionAsync(solutionOrProjectPath, cancellationToken: cancellationToken).ConfigureAwait(false);
             else

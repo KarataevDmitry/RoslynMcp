@@ -12,16 +12,6 @@ namespace RoslynMcp.ServiceLayer;
 /// <summary>Диагностики компиляции (ошибки, предупреждения) по solution/project. Опционально — только по одному файлу.</summary>
 public static class GetDiagnostics
 {
-    /// <summary>
-    /// По умолчанию MSBuildWorkspace делает design-time build — без полного конвейёра компиляции source generators
-    /// (CommunityToolkit.Mvvm и др.) могут не попасть в <see cref="Compilation"/>. Отключаем design-only режим.
-    /// </summary>
-    private static readonly ImmutableDictionary<string, string> MsbuildWorkspaceGlobalProperties =
-        ImmutableDictionary.CreateRange<string, string>([
-            new("DesignTimeBuild", "false"),
-            new("SkipCompilerExecution", "false"),
-        ]);
-
     private static string NormalizePath(string path)
     {
         var p = Path.GetFullPath(path.Trim());
@@ -200,7 +190,7 @@ public static class GetDiagnostics
             foreach (var projectPath in projectPaths)
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                var workspace = MSBuildWorkspace.Create(MsbuildWorkspaceGlobalProperties);
+                var workspace = MSBuildWorkspace.Create(RoslynMcpWorkspaceProperties.MsBuild);
                 try
                 {
                     var solution = (await workspace.OpenProjectAsync(projectPath, cancellationToken: cancellationToken).ConfigureAwait(false)).Solution;
@@ -223,7 +213,7 @@ public static class GetDiagnostics
             Solution? solution = null;
             try
             {
-                var workspace = MSBuildWorkspace.Create(MsbuildWorkspaceGlobalProperties);
+                var workspace = MSBuildWorkspace.Create(RoslynMcpWorkspaceProperties.MsBuild);
                 if (string.Equals(ext, ".sln", StringComparison.OrdinalIgnoreCase))
                     solution = await workspace.OpenSolutionAsync(solutionOrProjectPath, cancellationToken: cancellationToken).ConfigureAwait(false);
                 else

@@ -32,7 +32,7 @@ public static class SymbolAtPosition
         Solution? solution = null;
         try
         {
-            var workspace = MSBuildWorkspace.Create();
+            var workspace = MSBuildWorkspace.Create(RoslynMcpWorkspaceProperties.MsBuild);
             solution = string.Equals(Path.GetExtension(solutionOrProjectPath), ".sln", StringComparison.OrdinalIgnoreCase)
                 ? await workspace.OpenSolutionAsync(solutionOrProjectPath, cancellationToken: ct).ConfigureAwait(false)
                 : (await workspace.OpenProjectAsync(solutionOrProjectPath, cancellationToken: ct).ConfigureAwait(false)).Solution;

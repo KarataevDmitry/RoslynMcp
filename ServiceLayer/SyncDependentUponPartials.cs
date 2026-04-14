@@ -34,7 +34,7 @@ public static class SyncDependentUponPartials
         MSBuildWorkspace? workspace = null;
         try
         {
-            workspace = MSBuildWorkspace.Create();
+            workspace = MSBuildWorkspace.Create(RoslynMcpWorkspaceProperties.MsBuild);
             Microsoft.CodeAnalysis.Solution solution;
             if (string.Equals(Path.GetExtension(solutionOrProjectPath), ".sln", StringComparison.OrdinalIgnoreCase))
                 solution = await workspace.OpenSolutionAsync(solutionOrProjectPath, cancellationToken: cancellationToken).ConfigureAwait(false);

@@ -50,7 +50,7 @@ public static class MoveMembersToPartialFile
         MSBuildWorkspace? workspace = null;
         try
         {
-            workspace = MSBuildWorkspace.Create();
+            workspace = MSBuildWorkspace.Create(RoslynMcpWorkspaceProperties.MsBuild);
             Solution solution;
             if (string.Equals(Path.GetExtension(solutionOrProjectPath), ".sln", StringComparison.OrdinalIgnoreCase))
                 solution = await workspace.OpenSolutionAsync(solutionOrProjectPath, cancellationToken: cancellationToken).ConfigureAwait(false);

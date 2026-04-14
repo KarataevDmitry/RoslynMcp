@@ -1,4 +1,3 @@
-using System.Collections.Immutable;
 using Microsoft.Build.Locator;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.MSBuild;
@@ -38,11 +37,7 @@ public sealed class GetDiagnosticsSourceGeneratorsIntegrationTests
         var solutionPath = parts[0];
         var filePath = parts[1];
 
-        var workspace = MSBuildWorkspace.Create(
-            ImmutableDictionary.CreateRange<string, string>([
-                new KeyValuePair<string, string>("DesignTimeBuild", "false"),
-                new KeyValuePair<string, string>("SkipCompilerExecution", "false"),
-            ]));
+        var workspace = MSBuildWorkspace.Create(RoslynMcpWorkspaceProperties.MsBuild);
         try
         {
             var solution = await workspace.OpenSolutionAsync(solutionPath, cancellationToken: CancellationToken.None).ConfigureAwait(true);
