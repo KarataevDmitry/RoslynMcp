@@ -1,14 +1,18 @@
 # Source generators и `roslyn_get_diagnostics` (Community Toolkit MVVM и др.)
 
-## Симптом
+## Статус
 
-По файлам, которые ссылаются на **члены, сгенерированные** Roslyn source generators (например `[ObservableProperty]` / `[RelayCommand]` в **CommunityToolkit.Mvvm**), `roslyn_get_diagnostics` мог выдавать **ложные** ошибки вроде:
+В текущей версии RoslynMcp конвейёр в **`ServiceLayer/GetDiagnostics.cs`** учитывает source generators (см. раздел «Реализация» ниже). Ниже — **почему** это было нужно и что делать, если рассогласование всё же проявится.
+
+## Симптом (исторический / краевой случай)
+
+Раньше по файлам, которые ссылаются на **члены, сгенерированные** Roslyn source generators (например `[ObservableProperty]` / `[RelayCommand]` в **CommunityToolkit.Mvvm**), `roslyn_get_diagnostics` мог выдавать **ложные** ошибки вроде:
 
 `CS1061: 'MainWindowViewModel' does not contain a definition for 'UiMode'…`
 
-При этом `dotnet build` того же проекта проходит.
+при том что `dotnet build` того же проекта проходил.
 
-## Почему так
+## Почему так бывает (модель Roslyn)
 
 - Сгенерированные деревья не входят в `Project.Documents`; их нужно получать через `Project.GetSourceGeneratedDocumentsAsync` (см. [документацию API](https://learn.microsoft.com/dotnet/api/microsoft.codeanalysis.project.getsourcegenerateddocumentsasync)).
 - После вызова генераторов обновляется **`Workspace.CurrentSolution`**. Старый снимок `Project` остаётся **без** сгенерированных синтаксических деревьев; компиляция и семантическая модель должны браться из **актуального** решения (`workspace.CurrentSolution.GetProject(projectId)` и далее `GetCompilationAsync` / `GetSemanticModelAsync`).
@@ -19,9 +23,9 @@
 
 `ServiceLayer/GetDiagnostics.cs`: после `GetSourceGeneratedDocumentsAsync` проект перезапрашивается из `workspace.CurrentSolution`, затем строится `Compilation` и диагностики.
 
-## Временной обходной путь для агента
+## Если вывод всё же противоречит `dotnet build`
 
-Если вывод инструмента всё же противоречит `dotnet build`, ориентироваться на результат сборки.
+Ориентироваться на результат сборки (редкий краевой случай после правок конвейёра).
 
 ## Опционально в целевом приложении (отладка генераторов)
 

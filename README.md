@@ -14,11 +14,11 @@ RoslynMcp всегда передаёт в MSBuild свойство **`RoslynMcp
 
 Зачем: процесс RoslynMcp иначе может держать загруженной ту же сборку в `bin\…`, которую `dotnet build` затем перезаписывает — на Windows это даёт «file is being used by another process». Отключение такой ссылки **только при** `RoslynMcpWorkspace=true` оставляет обычные сборки и CI без этого флага с полным набором анализаторов; детали опт-in — в документации **того** решения, где условие добавлено.
 
-### Source generators и ложные диагностики (MVVM Toolkit и др.)
+### Source generators (MVVM Toolkit и др.)
 
-Это **отдельно** от блокировки DLL анализаторов (раздел выше): речь про рассогласование **семантики** с **source generators**, когда `dotnet build` уже зелёный.
+Это **отдельно** от блокировки DLL анализаторов (раздел выше).
 
-Если `roslyn_get_diagnostics` показывает **CS1061** на свойствах/командах из `[ObservableProperty]` / `[RelayCommand]`, а **`dotnet build` зелёный**, это не «битый» проект, а несогласованность загрузки workspace с конвейёром генераторов. Глобальные свойства MSBuild для workspace (в т.ч. отключение design-only сборки) задаются в **`RoslynMcpWorkspaceProperties`** и используются вместе с **`GetSourceGeneratedDocumentsAsync`** в `ServiceLayer/GetDiagnostics.cs`. Подробно — **[docs/source-generators-and-diagnostics.md](docs/source-generators-and-diagnostics.md)**.
+Для проектов с **source generators** (например `[ObservableProperty]` / `[RelayCommand]` в CommunityToolkit.Mvvm) `roslyn_get_diagnostics` поднимает сгенерированные документы через **`GetSourceGeneratedDocumentsAsync`** и берёт проект/компиляцию из актуального **`workspace.CurrentSolution`** — см. **`ServiceLayer/GetDiagnostics.cs`**; глобальные свойства MSBuild для workspace — в **`RoslynMcpWorkspaceProperties`**. Раньше без этого конвейёра при зелёном **`dotnet build`** иногда возникали ложные **CS1061**; это **учтено в реализации**. Если вывод инструмента всё же расходится со сборкой (краевой случай), ориентир — **`dotnet build`**. Подробнее — **[docs/source-generators-and-diagnostics.md](docs/source-generators-and-diagnostics.md)**.
 
 ## Требования
 
