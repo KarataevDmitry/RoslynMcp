@@ -42,6 +42,18 @@ dotnet run
 
 Чтобы Cursor запускал MCP из **exe**, а не из проекта, сборка не будет блокироваться запущенным процессом.
 
+### Быстрый локальный publish (рекомендуется)
+
+В репозитории есть `publish-and-deploy.ps1`: он прогоняет генерацию `mcp-tools.manifest.json` / `docs/MCP-TOOLS.md`, публикует self-contained `win-x64`, зеркалит в фиксированный путь (по умолчанию `D:\roslyn-mcp`) и гасит процесс, если он лочит файлы.
+
+```powershell
+.\publish-and-deploy.ps1
+```
+
+### Релизы (zip + GitLab upload)
+
+`scripts/publish-release-win.ps1` — это отдельный сценарий: мультиплатформа (win/linux/osx), упаковка в zip и загрузка в GitLab Generic Packages/Release.
+
 В **csproj** заданы `RuntimeIdentifiers` (в т.ч. `win-x64`) и `SelfContained=true` — самодостаточная сборка (рантайм в папке, не зависит от установленного .NET в системе). Достаточно:
 
 ```bash
