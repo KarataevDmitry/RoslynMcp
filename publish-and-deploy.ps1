@@ -23,9 +23,11 @@ try {
     # Prefer local tool (repo-pinned), but global install works too.
     if (Test-Path -LiteralPath (Join-Path $here ".config\\dotnet-tools.json")) {
         & dotnet tool restore | Out-Null
-        & dotnet aid-publish -Project $csproj -Target $Target -Runtime "win-x64" -Configuration "Release" -SelfContained -KillRunning
+        & dotnet aid-publish -Project $csproj -Target $Target -Runtime "win-x64" -Configuration "Release" -SelfContained -KillRunning `
+            -RequireMirrorFile BuildHost-netcore/Microsoft.CodeAnalysis.Workspaces.MSBuild.BuildHost.dll
     } else {
-        & aid-publish -Project $csproj -Target $Target -Runtime "win-x64" -Configuration "Release" -SelfContained -KillRunning
+        & aid-publish -Project $csproj -Target $Target -Runtime "win-x64" -Configuration "Release" -SelfContained -KillRunning `
+            -RequireMirrorFile BuildHost-netcore/Microsoft.CodeAnalysis.Workspaces.MSBuild.BuildHost.dll
     }
     if ($LASTEXITCODE -ne 0) { exit $LASTEXITCODE }
 
@@ -33,7 +35,7 @@ try {
     # aid-publish mirrors the full publish tree — if BuildHost-netcore was ever missing here, MCP failed at roslyn_* with "build host could not be found".
     $buildHostDll = Join-Path $Target "BuildHost-netcore\Microsoft.CodeAnalysis.Workspaces.MSBuild.BuildHost.dll"
     if (-not (Test-Path -LiteralPath $buildHostDll)) {
-        Write-Error "Publish incomplete: MSBuild Workspace BuildHost missing: $buildHostdll`nRun dotnet publish manually with -r win-x64 --self-contained true or fix aid-publish / SDK output.`n(Optional on aid-publish 0.1.2+: -RequireMirrorFile BuildHost-netcore/Microsoft.CodeAnalysis.Workspaces.MSBuild.BuildHost.dll)"
+        Write-Error "Publish incomplete: MSBuild Workspace BuildHost missing: $buildHostDll`nRun dotnet publish manually with -r win-x64 --self-contained true or fix SDK output.`nIf aid-publish is older than 0.1.2, dotnet tool restore and pin AIGuiders.DotnetTools.PublishFixedTarget 0.1.2+."
         exit 1
     }
 
