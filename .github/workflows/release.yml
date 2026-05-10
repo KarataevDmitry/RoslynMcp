@@ -6,6 +6,11 @@ on:
     tags:
       - 'v*'
   workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Тег для GitHub Release (например v0.1.0). Пусто — только ZIP с именами …-manual-<run_id>-… без релиза.'
+        required: false
+        type: string
 
 permissions:
   contents: write
@@ -15,6 +20,7 @@ env:
   RELEASE_RIDS: 'win-x64 linux-x64 osx-x64 osx-arm64'
   PROJECT: RoslynMcp.csproj
   ARTIFACT_PREFIX: RoslynMcp
+  ZIP_LABEL: ${{ github.ref_type == 'tag' && github.ref_name || ((github.event.inputs.tag || '') != '' && github.event.inputs.tag || format('manual-{0}', github.run_id)) }}
 
 jobs:
   publish:
@@ -33,13 +39,15 @@ jobs:
           for rid in ${{ env.RELEASE_RIDS }}; do
             out="publish/${rid}"
             dotnet publish "$PROJECT" -c Release -r "$rid" --self-contained true -o "$out"
-            (cd "$out" && zip -r "../../dist/${ARTIFACT_PREFIX}-${GITHUB_REF_NAME}-${rid}.zip" .)
+            (cd "$out" && zip -r "../../dist/${ARTIFACT_PREFIX}-${ZIP_LABEL}-${rid}.zip" .)
           done
           (cd dist && sha256sum *.zip > SHA256SUMS)
 
       - name: GitHub Release
+        if: ${{ github.ref_type == 'tag' || (github.event_name == 'workflow_dispatch' && (github.event.inputs.tag || '') != '') }}
         uses: softprops/action-gh-release@v2
         with:
+          tag_name: ${{ github.ref_type == 'tag' && github.ref_name || github.event.inputs.tag }}
           files: |
             dist/*.zip
             dist/SHA256SUMS
